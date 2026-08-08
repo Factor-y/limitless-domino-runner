@@ -1,6 +1,7 @@
 package com.factory.domino.designer;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.factory.domino.runner.DominoExecutor;
@@ -42,6 +43,9 @@ public final class DominoWebDesigner {
     int dominoThreads = DEFAULT_DOMINO_THREADS;
     String mdnsName = DEFAULT_MDNS_NAME;
     boolean mdnsEnabled = true;
+    boolean allowWrite = false;
+    java.nio.file.Path backupDir = java.nio.file.Paths.get(
+        System.getProperty("user.home"), "domino-web-designer-backups");
 
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
@@ -50,10 +54,16 @@ public final class DominoWebDesigner {
         case "--domino-threads" -> dominoThreads = Integer.parseInt(args[++i]);
         case "--mdns-name" -> mdnsName = args[++i];
         case "--no-mdns" -> mdnsEnabled = false;
+        // Writing is opt-in: DXL import can replace design elements irreversibly, so the
+        // server must be started deliberately for it rather than being able to write
+        // simply because it is running.
+        case "--allow-write" -> allowWrite = true;
+        case "--backup-dir" -> backupDir = java.nio.file.Paths.get(args[++i]);
         default -> {
           System.err.println("domino-web-designer: unknown option '" + args[i] + "'");
           System.err.println("Usage: DominoWebDesigner [--port <port>] [--host <host>] "
-              + "[--domino-threads <n>] [--mdns-name <name>] [--no-mdns]");
+              + "[--domino-threads <n>] [--mdns-name <name>] [--no-mdns] "
+              + "[--allow-write] [--backup-dir <path>]");
           return;
         }
       }
@@ -63,6 +73,8 @@ public final class DominoWebDesigner {
     // Domino context. See DominoExecutor for why this is not optional.
     DominoExecutor executor = new DominoExecutor(dominoThreads);
     DominoService service = new DominoService(executor);
+    DesignService designService = new DesignService(executor);
+    DxlService dxlService = new DxlService(executor, allowWrite, backupDir);
 
     Javalin app = Javalin.create(config -> {
       config.staticFiles.add(staticFiles -> {
@@ -81,6 +93,7 @@ public final class DominoWebDesigner {
     });
 
     registerRoutes(app, service);
+    registerDesignRoutes(app, designService, dxlService);
     registerErrorHandling(app);
 
     app.start(host, port);
@@ -103,6 +116,13 @@ public final class DominoWebDesigner {
     System.out.println("  Domino Web Designer ready at http://" + host + ":" + port + "/");
     System.out.println("  API documentation:      http://" + host + ":" + port + "/swagger/");
     System.out.println("  Domino worker threads: " + executor.getThreadCount());
+    if (allowWrite) {
+      System.out.println();
+      System.out.println("  *** WRITE ENABLED: DXL import and signing can modify databases.");
+      System.out.println("  *** Pre-import backups go to " + backupDir);
+    } else {
+      System.out.println("  Read-only. Start with --allow-write to enable DXL import and signing.");
+    }
     System.out.println();
   }
 
@@ -163,6 +183,93 @@ public final class DominoWebDesigner {
     });
   }
 
+  /** Design listing, DXL export and — behind --allow-write — DXL import and signing. */
+  private static void registerDesignRoutes(Javalin app, DesignService design, DxlService dxl) {
+
+    // Whether writing is possible at all, so the UI can say so instead of guessing.
+    app.get("/api/capabilities", ctx -> {
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("writeAllowed", dxl.isWriteAllowed());
+      body.put("importOptions", java.util.Arrays.stream(
+          com.hcl.domino.dxl.DxlImporter.DXLImportOption.values()).map(Enum::name).toList());
+      ctx.json(body);
+    });
+
+    // Every design element of a database, of every kind
+    app.get("/api/database/design", ctx ->
+        ctx.json(design.listDesign(ctx.queryParam("server"), requiredDb(ctx),
+            ctx.queryParam("type"), "true".equalsIgnoreCase(ctx.queryParam("signatures")))));
+
+    // DXL of one note — design element or document
+    app.get("/api/dxl/export", ctx -> {
+      String name = ctx.queryParam("unid") != null && !ctx.queryParam("unid").isEmpty()
+          ? ctx.queryParam("unid") : ctx.queryParam("noteid");
+      prepareDxlResponse(ctx, "note-" + name + ".dxl", ctx.queryParam("download"));
+      dxl.exportNote(ctx.queryParam("server"), requiredDb(ctx), ctx.queryParam("noteid"),
+          ctx.queryParam("unid"), exportOptions(ctx), ctx.outputStream());
+    });
+
+    // DXL of several notes at once
+    app.get("/api/dxl/export/notes", ctx -> {
+      List<String> noteIds = java.util.Arrays.stream(required(ctx, "noteids").split(","))
+          .map(String::trim).filter(s -> !s.isEmpty()).toList();
+      prepareDxlResponse(ctx, "notes.dxl", ctx.queryParam("download"));
+      dxl.exportNotes(ctx.queryParam("server"), requiredDb(ctx), noteIds, exportOptions(ctx),
+          ctx.outputStream());
+    });
+
+    // DXL of a whole database, its design only, or its ACL
+    app.get("/api/dxl/export/database", ctx -> {
+      String what = ctx.queryParam("what") == null ? "all" : ctx.queryParam("what");
+      prepareDxlResponse(ctx, requiredDb(ctx).replaceAll("[^A-Za-z0-9._-]", "_")
+          + "-" + what + ".dxl", ctx.queryParam("download"));
+      dxl.exportDatabase(ctx.queryParam("server"), requiredDb(ctx), what, exportOptions(ctx),
+          ctx.outputStream());
+    });
+
+    // Import: a dry run unless confirm=true, and only with --allow-write
+    app.post("/api/dxl/import", ctx -> {
+      String content = ctx.uploadedFile("file") != null
+          ? new String(ctx.uploadedFile("file").content().readAllBytes(),
+              java.nio.charset.StandardCharsets.UTF_8)
+          : ctx.body();
+
+      DxlService.ImportOptions options = new DxlService.ImportOptions(
+          DxlService.parseImportOption(ctx.queryParam("designOption"),
+              com.hcl.domino.dxl.DxlImporter.DXLImportOption.REPLACE_ELSE_CREATE),
+          DxlService.parseImportOption(ctx.queryParam("documentOption"),
+              com.hcl.domino.dxl.DxlImporter.DXLImportOption.CREATE),
+          "true".equalsIgnoreCase(ctx.queryParam("sign")),
+          "true".equalsIgnoreCase(ctx.queryParam("confirm")),
+          "true".equalsIgnoreCase(ctx.queryParam("validate")),
+          "true".equalsIgnoreCase(ctx.queryParam("replicaRequired")));
+
+      ctx.json(dxl.importDxl(ctx.queryParam("server"), requiredDb(ctx), content, options));
+    });
+
+    // Sign an existing note
+    app.post("/api/dxl/sign", ctx ->
+        ctx.json(dxl.signNote(ctx.queryParam("server"), requiredDb(ctx),
+            ctx.queryParam("noteid"), ctx.queryParam("unid"))));
+  }
+
+  /** Sets the content type and, when asked, the attachment header for a DXL response. */
+  private static void prepareDxlResponse(Context ctx, String fileName, String download) {
+    ctx.contentType("application/xml; charset=utf-8");
+    if ("true".equalsIgnoreCase(download)) {
+      ctx.header("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+    }
+  }
+
+  private static DxlService.ExportOptions exportOptions(Context ctx) {
+    return new DxlService.ExportOptions(
+        "true".equalsIgnoreCase(ctx.queryParam("omitAttachments")),
+        "true".equalsIgnoreCase(ctx.queryParam("omitPictures")),
+        "true".equalsIgnoreCase(ctx.queryParam("omitOle")),
+        "true".equalsIgnoreCase(ctx.queryParam("forceNoteFormat")),
+        !"false".equalsIgnoreCase(ctx.queryParam("outputDoctype")));
+  }
+
   private static void registerErrorHandling(Javalin app) {
     app.exception(DominoService.NotFoundException.class, (e, ctx) -> {
       ctx.status(404);
@@ -170,6 +277,10 @@ public final class DominoWebDesigner {
     });
     app.exception(IllegalArgumentException.class, (e, ctx) -> {
       ctx.status(400);
+      ctx.json(error(e.getMessage()));
+    });
+    app.exception(DxlService.WriteNotAllowedException.class, (e, ctx) -> {
+      ctx.status(403);
       ctx.json(error(e.getMessage()));
     });
     app.exception(Exception.class, (e, ctx) -> {

@@ -383,7 +383,7 @@ public final class DominoService {
 
   // --- helpers ---------------------------------------------------------------------
 
-  private static Database openDatabase(DominoClient client, String server, String db) {
+  static Database openDatabase(DominoClient client, String server, String db) {
     if (db == null || db.isEmpty()) {
       throw new IllegalArgumentException("parameter 'db' is required");
     }
@@ -397,7 +397,7 @@ public final class DominoService {
     }
   }
 
-  private static int parseNoteId(String noteId) {
+  static int parseNoteId(String noteId) {
     String value = noteId.trim();
     try {
       // Note IDs are conventionally written in hex, often with an NT prefix.

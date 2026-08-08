@@ -95,7 +95,7 @@ run-sample limit="10":
 
 # Start the DominoWebDesigner web application (Ctrl+C cannot stop it — use `just stop`)
 run-designer *args:
-    "{{ runner_script }}" --jar "{{ designer_jar }}" --wait {{ args }}
+    "{{ runner_script }}" --jar "{{ designer_jar }}" --wait -- {{ args }}
 
 # Run any main class or application jar under the runner
 run *args:

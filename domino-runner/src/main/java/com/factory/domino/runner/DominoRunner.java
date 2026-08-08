@@ -128,7 +128,13 @@ public final class DominoRunner {
           verbose = true;
           break;
         case "--":
-          // Explicit end of options: the next argument is the main class.
+          // Explicit end of options. With --jar the main class comes from the manifest, so
+          // everything after '--' belongs to the hosted program — without this there is no
+          // way to pass it an argument that looks like a runner option.
+          if (applicationJar != null) {
+            programArgs.addAll(Arrays.asList(args).subList(i + 1, args.length));
+            return true;
+          }
           if (i + 1 >= args.length) {
             throw new IllegalArgumentException("no main class given after '--'");
           }
