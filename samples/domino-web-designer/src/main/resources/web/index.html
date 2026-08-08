@@ -167,6 +167,32 @@
       margin: 0;
     }
     .hidden { display: none; }
+    textarea {
+      width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px;
+    }
+    select {
+      padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg); color: var(--text); font-size: 13px;
+    }
+    label.check { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text); }
+    button.danger { background: #b42318; color: #fff; border-color: #b42318; }
+    button.danger:hover:not(:disabled) { opacity: .9; color: #fff; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .warn {
+      background: #fef0c7; border: 1px solid #fdb022; color: #7a2e0e;
+      padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .warn { background: #3a2a10; border-color: #7a5a20; color: #f5c77e; }
+    }
+    .ok {
+      background: #dcfae6; border: 1px solid #75d69c; color: #085d3a;
+      padding: 10px 12px; border-radius: 6px; font-size: 13px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ok { background: #10281b; border-color: #2f6b48; color: #86e0ad; }
+    }
     td.link { cursor: pointer; color: var(--accent); }
     td.link:hover { text-decoration: underline; }
     .form-heading { margin: 12px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -232,12 +258,73 @@
 
       <div class="tabs">
         <div class="tab active" data-tab="details">Details</div>
+        <div class="tab" data-tab="design">Design</div>
         <div class="tab" data-tab="views">Views</div>
         <div class="tab" data-tab="forms">Forms</div>
         <div class="tab" data-tab="document">Document</div>
         <div class="tab" data-tab="named">Named</div>
         <div class="tab" data-tab="profile">Profile</div>
+        <div class="tab" data-tab="dxl">DXL</div>
       </div>
+
+      <section class="panel hidden" id="tab-design">
+        <h2>Design elements</h2>
+        <div class="row">
+          <div class="field">
+            <label for="designFilter">Filter by name or type</label>
+            <input type="text" id="designFilter" placeholder="e.g. Form, or a title">
+          </div>
+          <label class="check"><input type="checkbox" id="designSignatures"> show signatures (slower)</label>
+          <button class="primary" id="loadDesign">Reload</button>
+          <button id="exportDbDesign">Export whole design</button>
+          <button id="exportDbAll">Export database</button>
+          <button id="exportDbAcl">Export ACL</button>
+        </div>
+        <div id="designBody" class="status">Select a database.</div>
+      </section>
+
+      <section class="panel hidden" id="tab-dxl">
+        <h2>DXL import</h2>
+        <div id="writeBanner"></div>
+        <div class="row">
+          <div class="field">
+            <label for="dxlFile">DXL file</label>
+            <input type="file" id="dxlFile" accept=".dxl,.xml,text/xml">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label for="dxlText">…or paste DXL</label>
+          <textarea id="dxlText" rows="8" placeholder="&lt;?xml version='1.0'?&gt;..."></textarea>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="designOption">Design elements</label>
+            <select id="designOption">
+              <option value="REPLACE_ELSE_CREATE" selected>Replace, else create</option>
+              <option value="CREATE">Create only</option>
+              <option value="UPDATE_ELSE_CREATE">Update, else create</option>
+              <option value="REPLACE_ELSE_IGNORE">Replace, else ignore</option>
+              <option value="IGNORE">Ignore</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="documentOption">Documents</label>
+            <select id="documentOption">
+              <option value="CREATE" selected>Create</option>
+              <option value="REPLACE_ELSE_CREATE">Replace, else create</option>
+              <option value="UPDATE_ELSE_CREATE">Update, else create</option>
+              <option value="IGNORE">Ignore</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" id="signAfter"> sign after import</label>
+          <label class="check"><input type="checkbox" id="replicaRequired"> require replica for replace</label>
+        </div>
+        <div class="row">
+          <button class="primary" id="dryRun">Dry run</button>
+          <button class="danger" id="doImport" disabled>Import for real</button>
+        </div>
+        <div id="importBody"></div>
+      </section>
 
       <section class="panel" id="tab-details">
         <h2>Database details</h2>
@@ -428,7 +515,10 @@
     $('workspace').classList.remove('hidden');
     $('selTitle').textContent = state.dbTitle;
     $('selPath').textContent = db.filePath;
-    ['documentBody', 'namedBody', 'profileBody'].forEach(id => $(id).innerHTML = '');
+    ['documentBody', 'namedBody', 'profileBody', 'importBody'].forEach(id => $(id).innerHTML = '');
+    designElements = [];
+    $('designBody').innerHTML = '<div class="status">Press Reload to read the design.</div>';
+    $('doImport').disabled = true;
     loadDetails();
     loadViews();
     loadForms();
@@ -440,7 +530,7 @@
     tab.onclick = () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      ['details', 'views', 'forms', 'document', 'named', 'profile'].forEach(name => {
+      ['details', 'design', 'views', 'forms', 'document', 'named', 'profile', 'dxl'].forEach(name => {
         $('tab-' + name).classList.toggle('hidden', name !== tab.dataset.tab);
       });
     };
@@ -772,7 +862,233 @@
     }
   }
 
+  // --- design elements ------------------------------------------------------------
+
+  /** Cached so the filter box can work without re-querying Domino. */
+  let designElements = [];
+
+  async function loadDesign() {
+    const target = $('designBody');
+    setBusy(target, 'Reading the design...');
+    try {
+      const data = await api('/api/database/design', {
+        db: state.db,
+        signatures: $('designSignatures').checked ? 'true' : 'false'
+      });
+      designElements = data.elements;
+      renderDesign(data);
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  function renderDesign(data) {
+    const target = $('designBody');
+    const filter = $('designFilter').value.trim().toLowerCase();
+    const matches = designElements.filter(e => !filter
+      || (e.title || '').toLowerCase().includes(filter)
+      || (e.type || '').toLowerCase().includes(filter)
+      || (e.aliases || []).join(' ').toLowerCase().includes(filter));
+
+    target.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'status';
+    const byType = Object.entries(data.byType || {})
+      .map(([k, v]) => k + ' ' + v).join(' · ');
+    head.textContent = (filter ? matches.length + ' of ' + designElements.length : data.count)
+      + ' elements — ' + byType;
+    target.appendChild(head);
+
+    if (data.skippedTypes) {
+      const warn = document.createElement('div');
+      warn.className = 'warn';
+      warn.textContent = 'Some types could not be read: ' + JSON.stringify(data.skippedTypes);
+      target.appendChild(warn);
+    }
+
+    const showSig = $('designSignatures').checked;
+    const columns = ['Type', 'Title', 'Aliases', 'Note ID'];
+    if (showSig) columns.push('Signed by');
+    columns.push('DXL');
+
+    target.appendChild(table(columns, matches, e => {
+      const tr = document.createElement('tr');
+      tr.appendChild(cell(e.type, true));
+      tr.appendChild(cell(e.title));
+      tr.appendChild(cell((e.aliases || []).join(', ')));
+      tr.appendChild(cell(e.noteId, true));
+      if (showSig) {
+        tr.appendChild(cell(e.signed ? (e.signer || 'yes') : '—'));
+      }
+      const actions = document.createElement('td');
+      const view = document.createElement('button');
+      view.textContent = 'View';
+      view.onclick = () => showDxl(e);
+      const download = document.createElement('button');
+      download.textContent = 'Download';
+      download.onclick = () => downloadDxl(e.noteId);
+      actions.appendChild(view);
+      actions.appendChild(document.createTextNode(' '));
+      actions.appendChild(download);
+      tr.appendChild(actions);
+      return tr;
+    }));
+  }
+
+  function dxlUrl(noteId, download) {
+    const query = new URLSearchParams({ server: state.server, db: state.db, noteid: noteId });
+    if (download) query.set('download', 'true');
+    return '/api/dxl/export?' + query.toString();
+  }
+
+  function downloadDxl(noteId) {
+    window.location.href = dxlUrl(noteId, true);
+  }
+
+  /** Shows the DXL inline, so an element can be inspected without leaving the page. */
+  async function showDxl(element) {
+    const target = $('designBody');
+    const existing = $('dxlPanel');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'dxlPanel';
+    panel.className = 'field-detail';
+    panel.style.marginTop = '14px';
+    const heading = document.createElement('h3');
+    heading.textContent = 'DXL — ' + (element.title || element.noteId);
+    panel.appendChild(heading);
+    const pre = document.createElement('pre');
+    pre.textContent = 'Loading...';
+    panel.appendChild(pre);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'row';
+    buttons.style.marginTop = '10px';
+    const dl = document.createElement('button');
+    dl.textContent = 'Download';
+    dl.onclick = () => downloadDxl(element.noteId);
+    const copyToImport = document.createElement('button');
+    copyToImport.textContent = 'Send to import';
+    copyToImport.onclick = () => {
+      $('dxlText').value = pre.textContent;
+      document.querySelector('.tab[data-tab="dxl"]').click();
+    };
+    const close = document.createElement('button');
+    close.textContent = 'Close';
+    close.onclick = () => panel.remove();
+    buttons.appendChild(dl);
+    buttons.appendChild(copyToImport);
+    buttons.appendChild(close);
+    panel.appendChild(buttons);
+    target.appendChild(panel);
+
+    try {
+      const response = await fetch(dxlUrl(element.noteId, false));
+      const text = await response.text();
+      pre.textContent = response.ok ? text : 'Export failed: ' + text;
+    } catch (err) {
+      pre.textContent = 'Export failed: ' + err.message;
+    }
+  }
+
+  function exportDatabaseDxl(what) {
+    const query = new URLSearchParams({
+      server: state.server, db: state.db, what: what, download: 'true'
+    });
+    window.location.href = '/api/dxl/export/database?' + query.toString();
+  }
+
+  // --- DXL import -----------------------------------------------------------------
+
+  let writeAllowed = false;
+
+  async function loadCapabilities() {
+    try {
+      const response = await fetch('/api/capabilities');
+      const body = await response.json();
+      writeAllowed = body.writeAllowed;
+    } catch (err) {
+      writeAllowed = false;
+    }
+    const banner = $('writeBanner');
+    if (writeAllowed) {
+      banner.innerHTML = '<div class="warn"><strong>Write enabled.</strong> Importing can '
+        + 'replace design elements and documents irreversibly. The current design is backed up '
+        + 'to a DXL file before every import, and the path is reported in the result.</div>';
+    } else {
+      banner.innerHTML = '<div class="warn"><strong>Read-only.</strong> This server was started '
+        + 'without <code>--allow-write</code>, so import and signing are disabled. Restart it '
+        + 'with that flag to enable them.</div>';
+    }
+  }
+
+  async function readDxlInput() {
+    const file = $('dxlFile').files[0];
+    if (file) return await file.text();
+    return $('dxlText').value;
+  }
+
+  async function runImport(confirm) {
+    const target = $('importBody');
+    if (!state.db) { showError(target, new Error('Select a database first.')); return; }
+    const content = await readDxlInput();
+    if (!content.trim()) { showError(target, new Error('Provide a DXL file or paste DXL.')); return; }
+
+    setBusy(target, confirm ? 'Importing...' : 'Checking...');
+    const query = new URLSearchParams({
+      server: state.server,
+      db: state.db,
+      designOption: $('designOption').value,
+      documentOption: $('documentOption').value,
+      sign: $('signAfter').checked ? 'true' : 'false',
+      replicaRequired: $('replicaRequired').checked ? 'true' : 'false',
+      confirm: confirm ? 'true' : 'false'
+    });
+    try {
+      const response = await fetch('/api/dxl/import?' + query.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
+      renderImportResult(body, confirm);
+      // A real import is only unlocked by a dry run that succeeded, so the destructive
+      // button cannot be the first thing clicked.
+      $('doImport').disabled = confirm || !writeAllowed;
+    } catch (err) {
+      showError(target, err);
+      $('doImport').disabled = true;
+    }
+  }
+
+  function renderImportResult(body, wasReal) {
+    const target = $('importBody');
+    target.innerHTML = '';
+    const summary = document.createElement('div');
+    summary.className = wasReal ? 'ok' : 'status';
+    if (body.dryRun) {
+      summary.textContent = 'Dry run — nothing was written. '
+        + JSON.stringify(body.elementsFound || {}) + '. Review, then use "Import for real".';
+    } else {
+      summary.textContent = 'Imported ' + body.importedCount + ' note(s)'
+        + (body.signedCount !== undefined ? ', signed ' + body.signedCount + ' as ' + body.signedBy : '')
+        + '. Backup: ' + body.backup;
+    }
+    target.appendChild(summary);
+    target.appendChild(propertyTable(body) || document.createElement('div'));
+  }
+
   $('loadDbs').onclick = loadDatabases;
+  $('loadDesign').onclick = loadDesign;
+  $('designFilter').addEventListener('input', () => renderDesign({ byType: {}, count: designElements.length }));
+  $('designSignatures').onchange = loadDesign;
+  $('exportDbDesign').onclick = () => exportDatabaseDxl('design');
+  $('exportDbAll').onclick = () => exportDatabaseDxl('all');
+  $('exportDbAcl').onclick = () => exportDatabaseDxl('acl');
+  $('dryRun').onclick = () => runImport(false);
+  $('doImport').onclick = () => runImport(true);
   $('loadDoc').onclick = loadDocument;
   $('loadNamed').onclick = loadNamed;
   $('listNamed').onclick = listNamed;
@@ -780,6 +1096,7 @@
   $('server').addEventListener('keydown', e => { if (e.key === 'Enter') loadDatabases(); });
   $('dbFilter').addEventListener('input', renderDatabases);
 
+  loadCapabilities();
   loadDatabases();
 </script>
 

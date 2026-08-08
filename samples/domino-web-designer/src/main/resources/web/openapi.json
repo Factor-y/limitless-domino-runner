@@ -3,31 +3,57 @@
   "info": {
     "title": "Domino Web Designer API",
     "version": "1.0.0",
-    "description": "Read-only REST access to a local or remote HCL Domino environment, served by a program hosted in DominoRunner.\n\nAll access uses the Notes identity the runner was initialized with, for local and remote servers alike. Every endpoint is read-only except `POST /api/shutdown`.\n\n**Why query parameters instead of path segments:** Domino file paths contain `/` and `\\` for subdirectories, which as path segments would require fragile double-encoding."
+    "description": "Read and write access to a local or remote HCL Domino environment, served by a program hosted in DominoRunner.\n\nAll access uses the Notes identity the runner was initialized with. Reading is always available; **writing (DXL import and signing) requires the server to be started with `--allow-write`** and returns 403 otherwise.\n\n**Why query parameters instead of path segments:** Domino file paths contain `/` and `\\\\` for subdirectories, which as path segments would require fragile double-encoding."
   },
   "servers": [
-    { "url": "/", "description": "This server" }
+    {
+      "url": "/",
+      "description": "This server"
+    }
   ],
   "tags": [
-    { "name": "Databases", "description": "Database discovery and properties" },
-    { "name": "Design", "description": "Views and forms" },
-    { "name": "Documents", "description": "Document, named document and profile document items" },
-    { "name": "Server", "description": "Server lifecycle" }
+    {
+      "name": "Databases",
+      "description": "Database discovery and properties"
+    },
+    {
+      "name": "Design",
+      "description": "Views and forms"
+    },
+    {
+      "name": "DXL",
+      "description": "DXL export and import"
+    },
+    {
+      "name": "Documents",
+      "description": "Document, named document and profile document items"
+    },
+    {
+      "name": "Server",
+      "description": "Server lifecycle"
+    }
   ],
   "paths": {
     "/api/databases": {
       "get": {
-        "tags": ["Databases"],
+        "tags": [
+          "Databases"
+        ],
         "summary": "List databases on a server",
         "description": "Lists the databases visible to the current identity. Recursive by default: Domino's directory search is flat unless recursion is requested, which silently hides everything in subdirectories.",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
+          {
+            "$ref": "#/components/parameters/server"
+          },
           {
             "name": "recursive",
             "in": "query",
             "description": "Descend into subdirectories. Pass `false` for a flat listing of the data directory root only.",
             "required": false,
-            "schema": { "type": "boolean", "default": true }
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
           }
         ],
         "responses": {
@@ -38,52 +64,81 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "server": { "type": "string", "example": "(local)" },
-                    "recursive": { "type": "boolean" },
-                    "count": { "type": "integer" },
+                    "server": {
+                      "type": "string",
+                      "example": "(local)"
+                    },
+                    "recursive": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "databases": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/DatabaseEntry" }
+                      "items": {
+                        "$ref": "#/components/schemas/DatabaseEntry"
+                      }
                     }
                   }
                 }
               }
             }
           },
-          "500": { "$ref": "#/components/responses/Error" }
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/api/database": {
       "get": {
-        "tags": ["Databases"],
+        "tags": [
+          "Databases"
+        ],
         "summary": "Database details",
         "description": "Properties of a single database. Individual properties are best-effort: some are unavailable depending on the database and on the rights of the current identity, and are returned as null rather than failing the request.",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" }
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          }
         ],
         "responses": {
           "200": {
             "description": "Database properties",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DatabaseDetails" }
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetails"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/database/views": {
       "get": {
-        "tags": ["Design"],
+        "tags": [
+          "Design"
+        ],
         "summary": "List the views of a database",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" }
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          }
         ],
         "responses": {
           "200": {
@@ -93,29 +148,45 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "database": { "type": "string" },
-                    "count": { "type": "integer" },
+                    "database": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "views": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/ViewSummary" }
+                      "items": {
+                        "$ref": "#/components/schemas/ViewSummary"
+                      }
                     }
                   }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/database/forms": {
       "get": {
-        "tags": ["Design"],
+        "tags": [
+          "Design"
+        ],
         "summary": "List the forms of a database",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" }
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          }
         ],
         "responses": {
           "200": {
@@ -125,36 +196,54 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "database": { "type": "string" },
-                    "count": { "type": "integer" },
+                    "database": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "forms": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/FormSummary" }
+                      "items": {
+                        "$ref": "#/components/schemas/FormSummary"
+                      }
                     }
                   }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/database/form": {
       "get": {
-        "tags": ["Design"],
+        "tags": [
+          "Design"
+        ],
         "summary": "Full design of a single form",
         "description": "Everything the design holds about one form: its field definitions with data types, kinds and formulas, plus the form's own properties, formulas, events, subform references and LotusScript.\n\nThe form may be addressed by its title or by any of its aliases.",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" },
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
           {
             "name": "form",
             "in": "query",
             "description": "Form title or alias.",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "Person"
           }
         ],
@@ -163,36 +252,52 @@
             "description": "The form design",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/FormDetails" }
+                "schema": {
+                  "$ref": "#/components/schemas/FormDetails"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/document": {
       "get": {
-        "tags": ["Documents"],
+        "tags": [
+          "Documents"
+        ],
         "summary": "Items of a document, by note ID or UNID",
         "description": "Exactly one of `noteid` or `unid` must be given. Note IDs are hexadecimal and may carry an `NT` or `0x` prefix.",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" },
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
           {
             "name": "noteid",
             "in": "query",
             "description": "Hexadecimal note ID, e.g. `8FA` or `NT000008FA`.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "unid",
             "in": "query",
             "description": "32-character universal ID. Takes precedence over `noteid`.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -200,22 +305,34 @@
             "description": "The document and its items",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDump"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/documents/named": {
       "get": {
-        "tags": ["Documents"],
+        "tags": [
+          "Documents"
+        ],
         "summary": "List the named documents of a database",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" }
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          }
         ],
         "responses": {
           "200": {
@@ -225,16 +342,26 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "database": { "type": "string" },
-                    "count": { "type": "integer" },
+                    "database": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "namedDocuments": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "name": { "type": "string" },
-                          "userName": { "type": "string" },
-                          "noteId": { "type": "integer" }
+                          "name": {
+                            "type": "string"
+                          },
+                          "userName": {
+                            "type": "string"
+                          },
+                          "noteId": {
+                            "type": "integer"
+                          }
                         }
                       }
                     }
@@ -243,74 +370,110 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
         }
       }
     },
     "/api/document/named": {
       "get": {
-        "tags": ["Documents"],
+        "tags": [
+          "Documents"
+        ],
         "summary": "Items of a named document",
         "description": "Returns 404 when the name does not exist. Note that the underlying API would otherwise return a new, unsaved document for a missing name; that case is reported as not found, which is the correct reading for a read-only API.",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" },
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
           {
             "name": "name",
             "in": "query",
             "description": "Name of the document.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
-          { "$ref": "#/components/parameters/username" }
+          {
+            "$ref": "#/components/parameters/username"
+          }
         ],
         "responses": {
           "200": {
             "description": "The named document and its items",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDump"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/document/profile": {
       "get": {
-        "tags": ["Documents"],
+        "tags": [
+          "Documents"
+        ],
         "summary": "Items of a profile document",
         "parameters": [
-          { "$ref": "#/components/parameters/server" },
-          { "$ref": "#/components/parameters/db" },
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
           {
             "name": "profile",
             "in": "query",
             "description": "Profile name, e.g. `calendarprofile`.",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
-          { "$ref": "#/components/parameters/username" }
+          {
+            "$ref": "#/components/parameters/username"
+          }
         ],
         "responses": {
           "200": {
             "description": "The profile document and its items",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDump"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/shutdown": {
       "post": {
-        "tags": ["Server"],
+        "tags": [
+          "Server"
+        ],
         "summary": "Stop the server and the runner",
         "description": "Performs an orderly shutdown: HTTP server first, then the Domino worker threads, then the Domino runtime.\n\nThis exists because the Notes runtime installs native signal handlers that swallow SIGINT and SIGTERM, so Ctrl+C cannot stop the process and SIGKILL would skip all cleanup.",
         "responses": {
@@ -320,13 +483,627 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": { "status": { "type": "string" } }
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
           },
           "409": {
             "description": "The runner was not started with --wait, so there is nothing to stop"
+          }
+        }
+      }
+    },
+    "/api/capabilities": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "What this server allows",
+        "description": "Reports whether writing is enabled, so a client can disable destructive controls instead of guessing.",
+        "responses": {
+          "200": {
+            "description": "Capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "writeAllowed": {
+                      "type": "boolean"
+                    },
+                    "importOptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/database/design": {
+      "get": {
+        "tags": [
+          "Design"
+        ],
+        "summary": "Every design element of a database",
+        "description": "Enumerates the complete design. Built in two passes: types JNX can model are requested one at a time (a single unsupported kind would otherwise fail the whole listing), then the raw design collection supplies anything those passes missed, reported with type `Other`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only this type, e.g. `Form`, `View`, `Other`."
+          },
+          {
+            "name": "signatures",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Include signer and signed state. Off by default: it opens every design note."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The design elements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "database": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "modelledByJnx": {
+                      "type": "integer"
+                    },
+                    "other": {
+                      "type": "integer"
+                    },
+                    "byType": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
+                    "skippedTypes": {
+                      "type": "object",
+                      "description": "Types that could not be read, and why",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "elements": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DesignElementSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dxl/export": {
+      "get": {
+        "tags": [
+          "DXL"
+        ],
+        "summary": "DXL of one note",
+        "description": "Exports a single note — design element or document, which at this level are the same thing.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "noteid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Hexadecimal note ID."
+          },
+          {
+            "name": "unid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Universal ID. Takes precedence over noteid."
+          },
+          {
+            "name": "omitAttachments",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave rich text attachments out of the DXL."
+          },
+          {
+            "name": "omitPictures",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave pictures out."
+          },
+          {
+            "name": "omitOle",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave OLE objects out."
+          },
+          {
+            "name": "forceNoteFormat",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Export raw note format instead of the semantic form."
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Send Content-Disposition so the browser saves the file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DXL document",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dxl/export/notes": {
+      "get": {
+        "tags": [
+          "DXL"
+        ],
+        "summary": "DXL of several notes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "noteids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated hexadecimal note IDs.",
+            "example": "28A,2AA,29A"
+          },
+          {
+            "name": "omitAttachments",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave rich text attachments out of the DXL."
+          },
+          {
+            "name": "omitPictures",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave pictures out."
+          },
+          {
+            "name": "omitOle",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave OLE objects out."
+          },
+          {
+            "name": "forceNoteFormat",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Export raw note format instead of the semantic form."
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Send Content-Disposition so the browser saves the file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DXL document",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dxl/export/database": {
+      "get": {
+        "tags": [
+          "DXL"
+        ],
+        "summary": "DXL of a whole database, its design or its ACL",
+        "description": "Streamed to the response rather than assembled in memory: a full database export can run to hundreds of megabytes.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "what",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "design",
+                "acl"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "omitAttachments",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave rich text attachments out of the DXL."
+          },
+          {
+            "name": "omitPictures",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave pictures out."
+          },
+          {
+            "name": "omitOle",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Leave OLE objects out."
+          },
+          {
+            "name": "forceNoteFormat",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Export raw note format instead of the semantic form."
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Send Content-Disposition so the browser saves the file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DXL document",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dxl/import": {
+      "post": {
+        "tags": [
+          "DXL"
+        ],
+        "summary": "Import DXL into a database",
+        "description": "Writes to the database. Requires `--allow-write`, and is a **dry run unless `confirm=true`** — the dry run reports what the DXL contains without touching anything.\n\nBefore a real import the current design is exported to a backup file, whose path is returned; if the backup cannot be written the import is not attempted.\n\nTwo behaviours worth knowing: the DOCTYPE declaration is stripped from the DXL, because the DTD it points at cannot be resolved and would fail the import; and `replicaRequired` is false by default, since Domino would otherwise refuse to replace notes unless the DXL came from a replica of the target.\n\nThe operation is not transactional: notes are written before signing runs, so a signing failure is reported per note in `signErrors` alongside what did succeed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Actually write. Without it, nothing is changed."
+          },
+          {
+            "name": "sign",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Sign the imported notes with the runner's identity."
+          },
+          {
+            "name": "designOption",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "REPLACE_ELSE_CREATE"
+            },
+            "description": "How to treat design elements."
+          },
+          {
+            "name": "documentOption",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "CREATE"
+            },
+            "description": "How to treat documents."
+          },
+          {
+            "name": "replicaRequired",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Require DXL and database to be replicas before replacing."
+          },
+          {
+            "name": "validate",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Validate against the DTD. Usually fails, as the DTD cannot be resolved."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dry-run report, or the result of the import",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "backup": {
+                      "type": "string"
+                    },
+                    "importedCount": {
+                      "type": "integer"
+                    },
+                    "importedNoteIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "signedCount": {
+                      "type": "integer"
+                    },
+                    "signedBy": {
+                      "type": "string"
+                    },
+                    "signErrors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "log": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "description": "The server was started without --allow-write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dxl/sign": {
+      "post": {
+        "tags": [
+          "DXL"
+        ],
+        "summary": "Sign an existing note",
+        "description": "Applies the runner's identity to one note. Requires `--allow-write`.\n\nSigning goes through the classic Notes API: JNX's own `Document.sign()` fails on design notes with \"inconsistent field signatures\".",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/server"
+          },
+          {
+            "$ref": "#/components/parameters/db"
+          },
+          {
+            "name": "noteid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The signed note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "noteId": {
+                      "type": "string"
+                    },
+                    "unid": {
+                      "type": "string"
+                    },
+                    "signer": {
+                      "type": "string"
+                    },
+                    "signed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The server was started without --allow-write"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -339,7 +1116,10 @@
         "in": "query",
         "description": "Domino server name. Leave empty for the local data directory.",
         "required": false,
-        "schema": { "type": "string", "default": "" },
+        "schema": {
+          "type": "string",
+          "default": ""
+        },
         "example": ""
       },
       "db": {
@@ -347,7 +1127,9 @@
         "in": "query",
         "description": "Database file path (may include subdirectories) or replica ID.",
         "required": true,
-        "schema": { "type": "string" },
+        "schema": {
+          "type": "string"
+        },
         "example": "names.nsf"
       },
       "username": {
@@ -355,101 +1137,213 @@
         "in": "query",
         "description": "User name to scope the lookup to. Optional.",
         "required": false,
-        "schema": { "type": "string" }
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
       "BadRequest": {
         "description": "A required parameter is missing or malformed",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "NotFound": {
         "description": "The database, document or design element does not exist",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       },
       "Error": {
         "description": "Unexpected failure",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
         }
       }
     },
     "schemas": {
       "Error": {
         "type": "object",
-        "properties": { "error": { "type": "string" } }
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
       },
       "DatabaseEntry": {
         "type": "object",
         "properties": {
-          "filePath": { "type": "string", "example": "factor-y/erp/salesprocess.nsf" },
-          "fileName": { "type": "string" },
-          "fileLength": { "type": "integer", "format": "int64" },
-          "title": { "type": "string" },
-          "templateName": { "type": "string" },
-          "inheritTemplateName": { "type": "string" },
-          "category": { "type": "string" }
+          "filePath": {
+            "type": "string",
+            "example": "factor-y/erp/salesprocess.nsf"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "fileLength": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "templateName": {
+            "type": "string"
+          },
+          "inheritTemplateName": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
         }
       },
       "DatabaseDetails": {
         "type": "object",
         "properties": {
-          "server": { "type": "string" },
-          "title": { "type": "string" },
-          "replicaId": { "type": "string" },
-          "designTemplateName": { "type": "string" },
-          "absoluteFilePath": { "type": "string" },
-          "relativeFilePath": { "type": "string" },
-          "templateName": { "type": "string" },
-          "categories": { "type": "string" },
-          "created": { "type": "string", "format": "date-time" },
-          "dataModified": { "type": "string", "format": "date-time" },
-          "buildVersion": { "type": "string" },
-          "effectiveAccess": { "type": "string", "example": "MANAGER" },
-          "viewCount": { "type": "integer" },
-          "formCount": { "type": "integer" }
+          "server": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "replicaId": {
+            "type": "string"
+          },
+          "designTemplateName": {
+            "type": "string"
+          },
+          "absoluteFilePath": {
+            "type": "string"
+          },
+          "relativeFilePath": {
+            "type": "string"
+          },
+          "templateName": {
+            "type": "string"
+          },
+          "categories": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataModified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "buildVersion": {
+            "type": "string"
+          },
+          "effectiveAccess": {
+            "type": "string",
+            "example": "MANAGER"
+          },
+          "viewCount": {
+            "type": "integer"
+          },
+          "formCount": {
+            "type": "integer"
+          }
         }
       },
       "ViewSummary": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "aliases": { "type": "array", "items": { "type": "string" } },
-          "noteId": { "type": "string", "description": "Hexadecimal" },
-          "unid": { "type": "string" },
-          "comment": { "type": "string" },
-          "hideFromWeb": { "type": "boolean" },
-          "hideFromNotes": { "type": "boolean" },
-          "selectionFormula": { "type": "string" }
+          "title": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "noteId": {
+            "type": "string",
+            "description": "Hexadecimal"
+          },
+          "unid": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "hideFromWeb": {
+            "type": "boolean"
+          },
+          "hideFromNotes": {
+            "type": "boolean"
+          },
+          "selectionFormula": {
+            "type": "string"
+          }
         }
       },
       "FormSummary": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "aliases": { "type": "array", "items": { "type": "string" } },
-          "noteId": { "type": "string", "description": "Hexadecimal" },
-          "unid": { "type": "string" },
-          "comment": { "type": "string" },
-          "hideFromWeb": { "type": "boolean" },
-          "hideFromNotes": { "type": "boolean" },
-          "type": { "type": "string", "example": "DOCUMENT" }
+          "title": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "noteId": {
+            "type": "string",
+            "description": "Hexadecimal"
+          },
+          "unid": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "hideFromWeb": {
+            "type": "boolean"
+          },
+          "hideFromNotes": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string",
+            "example": "DOCUMENT"
+          }
         }
       },
       "FormDetails": {
         "allOf": [
-          { "$ref": "#/components/schemas/FormSummary" },
+          {
+            "$ref": "#/components/schemas/FormSummary"
+          },
           {
             "type": "object",
             "properties": {
-              "fieldCount": { "type": "integer" },
+              "fieldCount": {
+                "type": "integer"
+              },
               "fields": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/FormFieldDefinition" }
+                "items": {
+                  "$ref": "#/components/schemas/FormFieldDefinition"
+                }
               },
               "fieldsError": {
                 "type": "string",
@@ -463,25 +1357,38 @@
               "formulas": {
                 "type": "object",
                 "description": "Form-level formulas: windowTitle, webQueryOpen, webQuerySave and others",
-                "additionalProperties": { "type": "string" }
+                "additionalProperties": {
+                  "type": "string"
+                }
               },
               "events": {
                 "type": "object",
                 "description": "Formula-language events keyed by Domino event id",
-                "additionalProperties": { "type": "string" }
+                "additionalProperties": {
+                  "type": "string"
+                }
               },
               "subforms": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "properties": {
-                    "type": { "type": "string", "example": "FORMULA" },
-                    "value": { "type": "string" }
+                    "type": {
+                      "type": "string",
+                      "example": "FORMULA"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
                   }
                 }
               },
-              "lotusScript": { "type": "string" },
-              "lotusScriptGlobals": { "type": "string" }
+              "lotusScript": {
+                "type": "string"
+              },
+              "lotusScriptGlobals": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -489,45 +1396,100 @@
       "FormFieldDefinition": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "dataType": { "type": "string", "example": "TYPE_TEXT" },
+          "name": {
+            "type": "string"
+          },
+          "dataType": {
+            "type": "string",
+            "example": "TYPE_TEXT"
+          },
           "kind": {
             "type": "string",
-            "enum": ["EDITABLE", "COMPUTED", "COMPUTEDFORDISPLAY", "COMPUTEDWHENCOMPOSED"]
+            "enum": [
+              "EDITABLE",
+              "COMPUTED",
+              "COMPUTEDFORDISPLAY",
+              "COMPUTEDWHENCOMPOSED"
+            ]
           },
-          "displayType": { "type": "string", "example": "DIALOGLIST" },
-          "description": { "type": "string" },
-          "defaultValueFormula": { "type": "string" },
-          "inputTranslationFormula": { "type": "string" },
-          "inputValidityCheckFormula": { "type": "string" },
-          "keywordFormula": { "type": "string" },
-          "choices": { "type": "array", "items": { "type": "string" } },
-          "listInputDelimiters": { "type": "string" },
-          "listDisplayDelimiter": { "type": "string" },
+          "displayType": {
+            "type": "string",
+            "example": "DIALOGLIST"
+          },
+          "description": {
+            "type": "string"
+          },
+          "defaultValueFormula": {
+            "type": "string"
+          },
+          "inputTranslationFormula": {
+            "type": "string"
+          },
+          "inputValidityCheckFormula": {
+            "type": "string"
+          },
+          "keywordFormula": {
+            "type": "string"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "listInputDelimiters": {
+            "type": "string"
+          },
+          "listDisplayDelimiter": {
+            "type": "string"
+          },
           "html": {
             "type": "object",
             "description": "HTML attributes set on the field, omitted when all are empty",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
           },
-          "lotusScript": { "type": "string", "description": "LotusScript attached to this field" }
+          "lotusScript": {
+            "type": "string",
+            "description": "LotusScript attached to this field"
+          }
         }
       },
       "DocumentDump": {
         "type": "object",
         "properties": {
-          "unid": { "type": "string" },
-          "noteId": { "type": "string", "description": "Hexadecimal" },
-          "form": { "type": "string" },
-          "itemCount": { "type": "integer" },
+          "unid": {
+            "type": "string"
+          },
+          "noteId": {
+            "type": "string",
+            "description": "Hexadecimal"
+          },
+          "form": {
+            "type": "string"
+          },
+          "itemCount": {
+            "type": "integer"
+          },
           "items": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "name": { "type": "string" },
-                "type": { "type": "string", "example": "TYPE_TEXT" },
-                "summary": { "type": "boolean" },
-                "valueLength": { "type": "integer" },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "example": "TYPE_TEXT"
+                },
+                "summary": {
+                  "type": "boolean"
+                },
+                "valueLength": {
+                  "type": "integer"
+                },
                 "value": {
                   "type": "array",
                   "items": {},
@@ -540,6 +1502,57 @@
                 }
               }
             }
+          }
+        }
+      },
+      "DesignElementSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "JNX design type, or `Other` for notes JNX cannot model",
+            "example": "Form"
+          },
+          "title": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "noteId": {
+            "type": "string",
+            "description": "Hexadecimal"
+          },
+          "unid": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "hideFromWeb": {
+            "type": "boolean"
+          },
+          "hideFromNotes": {
+            "type": "boolean"
+          },
+          "signer": {
+            "type": "string",
+            "description": "Only when signatures=true"
+          },
+          "signed": {
+            "type": "boolean",
+            "description": "Only when signatures=true"
+          },
+          "documentClass": {
+            "type": "string",
+            "description": "Only for type Other"
+          },
+          "flags": {
+            "type": "string",
+            "description": "Design flags, only for type Other"
           }
         }
       }

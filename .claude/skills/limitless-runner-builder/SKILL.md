@@ -241,4 +241,6 @@ password that has nowhere to be typed.
 
 `README.md` in the project root records the environment obstacles and why each decision was
 made. `samples/domino-web-designer` is a complete worked example: fat jar, parent-last loading,
-`DominoExecutor`, ordered shutdown, REST APIs, OpenAPI/Swagger UI and mDNS.
+`DominoExecutor`, ordered shutdown, REST APIs, OpenAPI/Swagger UI, mDNS, and DXL export/import
+with a write gate. It also shows how to reach the classic `lotus.domino` API from a hosted jar
+(`NoteSigner`), which works because that package is one of the shared prefixes.

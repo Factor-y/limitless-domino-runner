@@ -112,7 +112,7 @@ Then open <http://127.0.0.1:8080/>. The UI lists the databases on a server (empt
 for the selected one, shows details, views, forms, and the items of a document, named document
 or profile document.
 
-REST APIs, all read-only:
+REST APIs — everything is read-only except the DXL import and signing endpoints:
 
 ```
 GET /api/databases?server=
@@ -123,9 +123,51 @@ GET /api/document?server=&db=&noteid=|&unid=
 GET /api/document/named?server=&db=&name=&username=
 GET /api/documents/named?server=&db=       lists the available named documents
 GET  /api/database/form?server=&db=&form=   full design of one form: fields, formulas, events
+GET  /api/database/design?server=&db=       every design element, of every kind
 GET  /api/document/profile?server=&db=&profile=&username=
+GET  /api/capabilities                      whether writing is enabled
 POST /api/shutdown                          stops the server and the runner cleanly
 ```
+
+DXL, read:
+
+```
+GET /api/dxl/export?server=&db=&noteid=|&unid=      one note, design element or document
+GET /api/dxl/export/notes?server=&db=&noteids=a,b   several notes in one document
+GET /api/dxl/export/database?server=&db=&what=all|design|acl
+```
+
+DXL, write — **requires `--allow-write`**, otherwise 403:
+
+```
+POST /api/dxl/import?server=&db=&confirm=&sign=&designOption=&documentOption=
+POST /api/dxl/sign?server=&db=&noteid=|&unid=
+```
+
+### Writing is opt-in, and deliberately awkward
+
+DXL import replaces design elements and documents with no undo, and signing applies your Notes
+identity to whatever is imported — a signed design element then runs with your authority. Four
+things stand between a running server and an accidental overwrite:
+
+1. **`--allow-write`**, off by default: a server that is merely running cannot modify anything.
+2. **Dry run by default**: without `confirm=true` the import reports what the DXL contains and
+   writes nothing. In the UI the real import button stays disabled until a dry run has run.
+3. **Backup first**: the current design is exported to a DXL file before every import, and the
+   path is returned. If the backup cannot be written, the import is not attempted.
+4. **Signing is separate**: never implicit, and reported with the identity that signed.
+
+The import is **not transactional** — notes are written before signing runs — so a signing
+failure is reported per note alongside what succeeded, rather than as a failed import.
+
+### Design listing takes two passes
+
+`queryDesignElements` in JNX throws `NotYetImplementedException` on element kinds it cannot
+model, which fails the entire listing rather than skipping one entry. So types are requested one
+at a time (asking for `ScriptLibrary` rather than its subtypes, which throw
+`IllegalArgumentException`), and the raw design collection then sweeps up whatever those passes
+missed, reported as type `Other`. On a stock `names.nsf`: 415 modelled, 13 others, 428 total,
+nothing dropped.
 
 **Interactive documentation** is at `/swagger/`, served from a bundled Swagger UI webjar (no CDN,
 so it works offline) against the OpenAPI 3 spec at `/openapi.json`. "Try it out" is enabled.
@@ -157,7 +199,8 @@ Server and database are query parameters rather than path segments because Domin
 `/` and `\` for subdirectories, which as path segments would need fragile double-encoding.
 
 Options: `--port` (default 8080), `--host` (default 127.0.0.1), `--domino-threads` (default 4),
-`--mdns-name` (default `domino.designer`), `--no-mdns`.
+`--mdns-name` (default `domino.designer`), `--no-mdns`, `--allow-write`, `--backup-dir <path>`
+(default `~/domino-web-designer-backups`).
 Everything is served with the runner's Notes identity, for local and remote servers alike, and
 the server binds to loopback only — there is no authentication in front of it.
 
