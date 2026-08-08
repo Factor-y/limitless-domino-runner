@@ -1,4 +1,4 @@
-package com.factory.domino.browser;
+package com.factory.domino.designer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

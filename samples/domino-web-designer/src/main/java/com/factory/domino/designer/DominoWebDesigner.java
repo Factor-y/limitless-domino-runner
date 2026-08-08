@@ -1,4 +1,4 @@
-package com.factory.domino.browser;
+package com.factory.domino.designer;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,7 +15,7 @@ import io.javalin.http.staticfiles.Location;
  *
  * <p>Run it with:
  * <pre>
- *   domino-runner-macos.sh --jar domino-browser.jar --wait
+ *   domino-runner-macos.sh --jar domino-web-designer.jar --wait
  * </pre>
  *
  * <p>{@code main} returns as soon as the listener is up — the runner's {@code --wait} keeps the
@@ -26,12 +26,12 @@ import io.javalin.http.staticfiles.Location;
  * runner's Notes identity, so it is not something to put on a network interface without
  * authentication in front of it.
  */
-public final class DominoBrowser {
+public final class DominoWebDesigner {
 
   private static final int DEFAULT_PORT = 8080;
   private static final String DEFAULT_HOST = "127.0.0.1";
   private static final int DEFAULT_DOMINO_THREADS = 4;
-  private static final String DEFAULT_MDNS_NAME = "domino.browser";
+  private static final String DEFAULT_MDNS_NAME = "domino.designer";
 
   /** Must match the org.webjars:swagger-ui version in the POM: it is part of the resource path. */
   private static final String SWAGGER_UI_VERSION = "5.25.3";
@@ -51,8 +51,8 @@ public final class DominoBrowser {
         case "--mdns-name" -> mdnsName = args[++i];
         case "--no-mdns" -> mdnsEnabled = false;
         default -> {
-          System.err.println("domino-browser: unknown option '" + args[i] + "'");
-          System.err.println("Usage: DominoBrowser [--port <port>] [--host <host>] "
+          System.err.println("domino-web-designer: unknown option '" + args[i] + "'");
+          System.err.println("Usage: DominoWebDesigner [--port <port>] [--host <host>] "
               + "[--domino-threads <n>] [--mdns-name <name>] [--no-mdns]");
           return;
         }
@@ -90,17 +90,17 @@ public final class DominoBrowser {
     // Ordered teardown: mDNS and server first, then Domino workers, then the runner releases
     // the runtime. A plain JVM shutdown hook would race that last step.
     RunnerLifecycle.onShutdown(() -> {
-      System.out.println("[domino-browser] stopping server...");
+      System.out.println("[domino-web-designer] stopping server...");
       if (mdns != null) {
         mdns.close();
       }
       app.stop();
       executor.close();
-      System.out.println("[domino-browser] stopped.");
+      System.out.println("[domino-web-designer] stopped.");
     });
 
     System.out.println();
-    System.out.println("  Domino Browser ready at http://" + host + ":" + port + "/");
+    System.out.println("  Domino Web Designer ready at http://" + host + ":" + port + "/");
     System.out.println("  API documentation:      http://" + host + ":" + port + "/swagger/");
     System.out.println("  Domino worker threads: " + executor.getThreadCount());
     System.out.println();
@@ -175,7 +175,7 @@ public final class DominoBrowser {
     app.exception(Exception.class, (e, ctx) -> {
       // Domino failures are reported rather than swallowed: a stack trace on the console
       // plus a readable message in the response.
-      System.err.println("[domino-browser] request failed: " + ctx.path());
+      System.err.println("[domino-web-designer] request failed: " + ctx.path());
       e.printStackTrace(System.err);
       ctx.status(500);
       ctx.json(error(e.getClass().getSimpleName() + ": " + e.getMessage()));

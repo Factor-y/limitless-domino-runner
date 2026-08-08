@@ -10,12 +10,12 @@ Domino context, so it can use both the classic `lotus.domino` API (Notes.jar) an
 | Module | What it is |
 |---|---|
 | `domino-runner` | The launcher, plus `DominoInfoSample` as a built-in example |
-| `samples/domino-browser` | **DominoBrowser** — a Javalin web app with REST APIs and a UI for browsing Domino databases, packaged as a fat jar and loaded with `--jar` |
+| `samples/domino-web-designer` | **DominoWebDesigner** — a Javalin web app with REST APIs and a UI for browsing Domino databases, packaged as a fat jar and loaded with `--jar` |
 
 ## Status
 
 macOS is implemented and verified end to end against a local HCL Notes 14.5 client, including
-DominoBrowser in Chrome. Linux and Windows scripts are provided and follow the same structure,
+DominoWebDesigner in Chrome. Linux and Windows scripts are provided and follow the same structure,
 but have not been run.
 
 ## Requirements
@@ -101,11 +101,11 @@ Expected output:
   ...
 ```
 
-### 4. Run DominoBrowser
+### 4. Run DominoWebDesigner
 
 ```bash
 ./domino-runner/target/dist/bin/domino-runner-macos.sh \
-  --jar samples/domino-browser/target/domino-browser.jar --wait
+  --jar samples/domino-web-designer/target/domino-web-designer.jar --wait
 ```
 
 Then open <http://127.0.0.1:8080/>. The UI lists the databases on a server (empty = local) and,
@@ -138,11 +138,11 @@ inspect it and a field name to expand its full definition inline.
 
 **mDNS/Bonjour**: the app announces itself on the network at startup. One detail decides what
 actually works here: mDNS resolves names only in the `.local` domain (RFC 6762), so a name like
-`domino.browser` can never be resolved by mDNS however it is registered. The announcer therefore
+`domino.designer` can never be resolved by mDNS however it is registered. The announcer therefore
 does both — it registers the *service instance* under the requested name (what Bonjour service
-browsers show) and a resolvable *host name* derived from it, `domino.browser` →
-**`domino-browser.local`**, which is what you can type into a browser. Verified:
-`http://domino-browser.local:8080/` resolves and serves.
+browsers show) and a resolvable *host name* derived from it, `domino.designer` →
+**`domino-designer.local`**, which is what you can type into a browser. Verified:
+`http://domino-designer.local:8080/` resolves and serves.
 
 Because the server binds to loopback by default, that name resolves to 127.0.0.1 and is only
 reachable from this machine; `--host 0.0.0.0` makes discovery meaningful across the network.
@@ -157,7 +157,7 @@ Server and database are query parameters rather than path segments because Domin
 `/` and `\` for subdirectories, which as path segments would need fragile double-encoding.
 
 Options: `--port` (default 8080), `--host` (default 127.0.0.1), `--domino-threads` (default 4),
-`--mdns-name` (default `domino.browser`), `--no-mdns`.
+`--mdns-name` (default `domino.designer`), `--no-mdns`.
 Everything is served with the runner's Notes identity, for local and remote servers alike, and
 the server binds to loopback only — there is no authentication in front of it.
 
@@ -274,7 +274,7 @@ Things that were not obvious and are worth recording:
   launcher's own packages to the parent. A second copy of the Domino classes would bind the
   native libraries twice, and objects crossing the two loaders would raise `ClassCastException`
   between same-named classes — both surfacing as native crashes rather than Java errors.
-  `domino-browser` also declares those dependencies `provided`, so the fat jar cannot contain
+  `domino-web-designer` also declares those dependencies `provided`, so the fat jar cannot contain
   them in the first place. This gives *isolation*, not a sandbox: since `SecurityManager` was
   deprecated (JEP 411) and disabled in recent JDKs, hosted code runs with full launcher
   privileges.
@@ -283,7 +283,7 @@ Things that were not obvious and are worth recording:
   ignores all three and only SIGKILL stops it. Verified by contrast: an identical JVM launched
   the same way, without Domino, runs its shutdown hooks normally. Re-installing handlers through
   `sun.misc.Signal` after Domino starts does not reclaim them either. The reliable path is an
-  explicit stop: `RunnerLifecycle.requestShutdown()`, which DominoBrowser exposes as
+  explicit stop: `RunnerLifecycle.requestShutdown()`, which DominoWebDesigner exposes as
   `POST /api/shutdown`. Plan for this in any long-running program you host.
 - **Shutdown ordering.** A hosted server cannot use its own JVM shutdown hook: hooks run
   concurrently, so the launcher could release the Domino runtime while a request is still in
@@ -298,7 +298,7 @@ Things that were not obvious and are worth recording:
   Jetty threads. Each worker being its own executor is what guarantees `terminateThread()` runs
   on the thread that initialized the context.
 - **`getNamedDocument()` creates rather than fails.** For a missing name JNX returns a new,
-  unsaved document (note ID 0) instead of an empty `Optional`. DominoBrowser treats note ID 0 as
+  unsaved document (note ID 0) instead of an empty `Optional`. DominoWebDesigner treats note ID 0 as
   a 404, which is the right reading for a read-only tool.
 
 ### Known cosmetic issue

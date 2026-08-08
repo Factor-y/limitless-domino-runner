@@ -17,7 +17,7 @@ jvm_root := justfile_directory() / ".jvm"
 java_home := jvm_root / semeru_dir_name / "Contents/Home"
 
 runner_script := justfile_directory() / "domino-runner/target/dist/bin/domino-runner-macos.sh"
-browser_jar := justfile_directory() / "samples/domino-browser/target/domino-browser.jar"
+designer_jar := justfile_directory() / "samples/domino-web-designer/target/domino-web-designer.jar"
 
 # List the available recipes
 default:
@@ -93,9 +93,9 @@ clean:
 run-sample limit="10":
     "{{ runner_script }}" com.factory.domino.samples.DominoInfoSample {{ limit }}
 
-# Start the DominoBrowser web application (Ctrl+C cannot stop it — use `just stop`)
-run-browser *args:
-    "{{ runner_script }}" --jar "{{ browser_jar }}" --wait {{ args }}
+# Start the DominoWebDesigner web application (Ctrl+C cannot stop it — use `just stop`)
+run-designer *args:
+    "{{ runner_script }}" --jar "{{ designer_jar }}" --wait {{ args }}
 
 # Run any main class or application jar under the runner
 run *args:
@@ -105,7 +105,7 @@ run *args:
 env:
     DOMINO_RUNNER_DEBUG=1 "{{ runner_script }}"
 
-# Stop a running DominoBrowser through its shutdown endpoint
+# Stop a running DominoWebDesigner through its shutdown endpoint
 stop port="8080":
     #!/usr/bin/env bash
     set -euo pipefail

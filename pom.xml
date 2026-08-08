@@ -13,7 +13,7 @@
 
   <modules>
     <module>domino-runner</module>
-    <module>samples/domino-browser</module>
+    <module>samples/domino-web-designer</module>
   </modules>
 
   <properties>

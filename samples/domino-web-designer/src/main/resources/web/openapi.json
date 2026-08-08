@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Domino Browser API",
+    "title": "Domino Web Designer API",
     "version": "1.0.0",
     "description": "Read-only REST access to a local or remote HCL Domino environment, served by a program hosted in DominoRunner.\n\nAll access uses the Notes identity the runner was initialized with, for local and remote servers alike. Every endpoint is read-only except `POST /api/shutdown`.\n\n**Why query parameters instead of path segments:** Domino file paths contain `/` and `\\` for subdirectories, which as path segments would require fragile double-encoding."
   },

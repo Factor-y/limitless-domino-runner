@@ -1,4 +1,4 @@
-package com.factory.domino.browser;
+package com.factory.domino.designer;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -18,15 +18,15 @@ import javax.jmdns.ServiceInfo;
  *
  * <p>One detail is worth stating plainly, because it decides what actually works: mDNS only
  * resolves names in the <strong>{@code .local}</strong> domain (RFC 6762). A name such as
- * {@code domino.browser} cannot be resolved by mDNS at all, no matter how it is registered — no
+ * {@code domino.designer} cannot be resolved by mDNS at all, no matter how it is registered — no
  * resolver will query multicast DNS for it. So this class does two different things with that
  * name:
  *
  * <ul>
  *   <li>registers the <em>service instance</em> under the requested name, which is what shows up
  *       in Bonjour service browsers and in Safari's Bonjour bookmarks;
- *   <li>registers a resolvable <em>host name</em> derived from it — {@code domino.browser}
- *       becomes {@code domino-browser.local} — which is what you can actually type into a
+ *   <li>registers a resolvable <em>host name</em> derived from it — {@code domino.designer}
+ *       becomes {@code domino-web-designer.local} — which is what you can actually type into a
  *       browser.
  * </ul>
  *
@@ -52,7 +52,7 @@ public final class MdnsAnnouncer implements AutoCloseable {
   /**
    * Announces the application on the network.
    *
-   * @param serviceName the advertised service name, e.g. {@code domino.browser}
+   * @param serviceName the advertised service name, e.g. {@code domino.designer}
    * @param bindHost the address the server is bound to, or {@code 0.0.0.0} for all interfaces
    * @param port the HTTP port
    * @return the announcer, or {@code null} if mDNS could not be started — discovery is a
@@ -87,7 +87,7 @@ public final class MdnsAnnouncer implements AutoCloseable {
       }
       return new MdnsAnnouncer(jmdns, serviceInfo, hostName);
     } catch (IOException | RuntimeException e) {
-      System.err.println("[domino-browser] mDNS registration failed (" + e
+      System.err.println("[domino-web-designer] mDNS registration failed (" + e
           + "); the server is unaffected.");
       return null;
     }
@@ -95,15 +95,15 @@ public final class MdnsAnnouncer implements AutoCloseable {
 
   /**
    * Turns a requested service name into a valid mDNS host label: lowercase, with anything that
-   * is not a letter, digit or hyphen replaced by a hyphen. {@code domino.browser} becomes
-   * {@code domino-browser}, which resolves as {@code domino-browser.local}.
+   * is not a letter, digit or hyphen replaced by a hyphen. {@code domino.designer} becomes
+   * {@code domino-web-designer}, which resolves as {@code domino-web-designer.local}.
    */
   static String toMdnsHostName(String serviceName) {
     String label = serviceName.toLowerCase(java.util.Locale.ROOT)
         .replaceAll("[^a-z0-9-]", "-")
         .replaceAll("-+", "-")
         .replaceAll("^-|-$", "");
-    return label.isEmpty() ? "domino-browser" : label;
+    return label.isEmpty() ? "domino-web-designer" : label;
   }
 
   /**
@@ -141,7 +141,7 @@ public final class MdnsAnnouncer implements AutoCloseable {
       jmdns.unregisterService(serviceInfo);
       jmdns.close();
     } catch (IOException | RuntimeException e) {
-      System.err.println("[domino-browser] error shutting down mDNS: " + e);
+      System.err.println("[domino-web-designer] error shutting down mDNS: " + e);
     }
   }
 }

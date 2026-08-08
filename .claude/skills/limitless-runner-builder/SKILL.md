@@ -187,7 +187,7 @@ public final class MyServer {
 ```
 
 Run it with `--wait`, which keeps the process alive after `main` returns:
-`just run-browser` or `just run --jar target/my-app.jar --wait`.
+`just run-designer` or `just run --jar target/my-app.jar --wait`.
 
 Bind to loopback unless you have a reason not to: whatever you expose is readable with the
 runner's Notes identity, and there is no authentication in front of it.
@@ -240,5 +240,5 @@ password that has nowhere to be typed.
 ## Reference
 
 `README.md` in the project root records the environment obstacles and why each decision was
-made. `samples/domino-browser` is a complete worked example: fat jar, parent-last loading,
+made. `samples/domino-web-designer` is a complete worked example: fat jar, parent-last loading,
 `DominoExecutor`, ordered shutdown, REST APIs, OpenAPI/Swagger UI and mDNS.

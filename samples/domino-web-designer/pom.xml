@@ -11,10 +11,10 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
-  <artifactId>domino-browser</artifactId>
+  <artifactId>domino-web-designer</artifactId>
   <packaging>jar</packaging>
 
-  <name>Domino Browser</name>
+  <name>Domino Web Designer</name>
   <description>Web application, launched by DominoRunner, exposing REST APIs and a UI to browse Domino databases.</description>
 
   <dependencies>
@@ -57,7 +57,7 @@
     </dependency>
 
     <!-- Swagger UI assets, served from the fat jar so the API docs work offline.
-         The version appears in the resource path, so DominoBrowser.SWAGGER_UI_VERSION
+         The version appears in the resource path, so DominoWebDesigner.SWAGGER_UI_VERSION
          must be kept in step with this. -->
     <dependency>
       <groupId>org.webjars</groupId>
@@ -105,7 +105,7 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.factory.domino.browser.DominoBrowser</mainClass>
+                  <mainClass>com.factory.domino.designer.DominoWebDesigner</mainClass>
                 </transformer>
               </transformers>
               <filters>
