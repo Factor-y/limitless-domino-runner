@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Domino Browser API — Swagger UI</title>
+  <!-- Assets come from the swagger-ui webjar bundled in the fat jar, not from a CDN,
+       so the documentation works with no network access. -->
+  <link rel="stylesheet" href="/swagger-ui/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #fafafa; }
+    .topbar { display: none; }
+    #back {
+      display: inline-block;
+      margin: 12px 0 0 20px;
+      font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #1a56b8;
+      text-decoration: none;
+    }
+    #back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <a id="back" href="/">← Back to Domino Browser</a>
+  <div id="swagger-ui"></div>
+
+  <script src="/swagger-ui/swagger-ui-bundle.js" crossorigin></script>
+  <script src="/swagger-ui/swagger-ui-standalone-preset.js" crossorigin></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+      plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+      layout: 'StandaloneLayout',
+      tryItOutEnabled: true,
+      displayRequestDuration: true,
+      docExpansion: 'list',
+      defaultModelsExpandDepth: 1
+    });
+  </script>
+</body>
+</html>

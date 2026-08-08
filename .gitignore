@@ -1,0 +1,12 @@
+target/
+
+# Locally downloaded JVM (see README: macOS needs an x86_64 OpenJ9 runtime)
+.jvm/
+
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+.DS_Store

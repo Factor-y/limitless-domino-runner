@@ -1,0 +1,548 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Domino Browser API",
+    "version": "1.0.0",
+    "description": "Read-only REST access to a local or remote HCL Domino environment, served by a program hosted in DominoRunner.\n\nAll access uses the Notes identity the runner was initialized with, for local and remote servers alike. Every endpoint is read-only except `POST /api/shutdown`.\n\n**Why query parameters instead of path segments:** Domino file paths contain `/` and `\\` for subdirectories, which as path segments would require fragile double-encoding."
+  },
+  "servers": [
+    { "url": "/", "description": "This server" }
+  ],
+  "tags": [
+    { "name": "Databases", "description": "Database discovery and properties" },
+    { "name": "Design", "description": "Views and forms" },
+    { "name": "Documents", "description": "Document, named document and profile document items" },
+    { "name": "Server", "description": "Server lifecycle" }
+  ],
+  "paths": {
+    "/api/databases": {
+      "get": {
+        "tags": ["Databases"],
+        "summary": "List databases on a server",
+        "description": "Lists the databases visible to the current identity. Recursive by default: Domino's directory search is flat unless recursion is requested, which silently hides everything in subdirectories.",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          {
+            "name": "recursive",
+            "in": "query",
+            "description": "Descend into subdirectories. Pass `false` for a flat listing of the data directory root only.",
+            "required": false,
+            "schema": { "type": "boolean", "default": true }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The databases found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "server": { "type": "string", "example": "(local)" },
+                    "recursive": { "type": "boolean" },
+                    "count": { "type": "integer" },
+                    "databases": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/DatabaseEntry" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/database": {
+      "get": {
+        "tags": ["Databases"],
+        "summary": "Database details",
+        "description": "Properties of a single database. Individual properties are best-effort: some are unavailable depending on the database and on the rights of the current identity, and are returned as null rather than failing the request.",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database properties",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DatabaseDetails" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/database/views": {
+      "get": {
+        "tags": ["Design"],
+        "summary": "List the views of a database",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The views defined in the database design",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "database": { "type": "string" },
+                    "count": { "type": "integer" },
+                    "views": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ViewSummary" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/database/forms": {
+      "get": {
+        "tags": ["Design"],
+        "summary": "List the forms of a database",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The forms defined in the database design",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "database": { "type": "string" },
+                    "count": { "type": "integer" },
+                    "forms": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/FormSummary" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/database/form": {
+      "get": {
+        "tags": ["Design"],
+        "summary": "Full design of a single form",
+        "description": "Everything the design holds about one form: its field definitions with data types, kinds and formulas, plus the form's own properties, formulas, events, subform references and LotusScript.\n\nThe form may be addressed by its title or by any of its aliases.",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" },
+          {
+            "name": "form",
+            "in": "query",
+            "description": "Form title or alias.",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "Person"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The form design",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FormDetails" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/document": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Items of a document, by note ID or UNID",
+        "description": "Exactly one of `noteid` or `unid` must be given. Note IDs are hexadecimal and may carry an `NT` or `0x` prefix.",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" },
+          {
+            "name": "noteid",
+            "in": "query",
+            "description": "Hexadecimal note ID, e.g. `8FA` or `NT000008FA`.",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "unid",
+            "in": "query",
+            "description": "32-character universal ID. Takes precedence over `noteid`.",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The document and its items",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/documents/named": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "List the named documents of a database",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The named documents that exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "database": { "type": "string" },
+                    "count": { "type": "integer" },
+                    "namedDocuments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "userName": { "type": "string" },
+                          "noteId": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/document/named": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Items of a named document",
+        "description": "Returns 404 when the name does not exist. Note that the underlying API would otherwise return a new, unsaved document for a missing name; that case is reported as not found, which is the correct reading for a read-only API.",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Name of the document.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/username" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The named document and its items",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/document/profile": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Items of a profile document",
+        "parameters": [
+          { "$ref": "#/components/parameters/server" },
+          { "$ref": "#/components/parameters/db" },
+          {
+            "name": "profile",
+            "in": "query",
+            "description": "Profile name, e.g. `calendarprofile`.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/username" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profile document and its items",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentDump" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/shutdown": {
+      "post": {
+        "tags": ["Server"],
+        "summary": "Stop the server and the runner",
+        "description": "Performs an orderly shutdown: HTTP server first, then the Domino worker threads, then the Domino runtime.\n\nThis exists because the Notes runtime installs native signal handlers that swallow SIGINT and SIGTERM, so Ctrl+C cannot stop the process and SIGKILL would skip all cleanup.",
+        "responses": {
+          "202": {
+            "description": "Shutdown accepted and under way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The runner was not started with --wait, so there is nothing to stop"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "server": {
+        "name": "server",
+        "in": "query",
+        "description": "Domino server name. Leave empty for the local data directory.",
+        "required": false,
+        "schema": { "type": "string", "default": "" },
+        "example": ""
+      },
+      "db": {
+        "name": "db",
+        "in": "query",
+        "description": "Database file path (may include subdirectories) or replica ID.",
+        "required": true,
+        "schema": { "type": "string" },
+        "example": "names.nsf"
+      },
+      "username": {
+        "name": "username",
+        "in": "query",
+        "description": "User name to scope the lookup to. Optional.",
+        "required": false,
+        "schema": { "type": "string" }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "A required parameter is missing or malformed",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "NotFound": {
+        "description": "The database, document or design element does not exist",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Error": {
+        "description": "Unexpected failure",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      },
+      "DatabaseEntry": {
+        "type": "object",
+        "properties": {
+          "filePath": { "type": "string", "example": "factor-y/erp/salesprocess.nsf" },
+          "fileName": { "type": "string" },
+          "fileLength": { "type": "integer", "format": "int64" },
+          "title": { "type": "string" },
+          "templateName": { "type": "string" },
+          "inheritTemplateName": { "type": "string" },
+          "category": { "type": "string" }
+        }
+      },
+      "DatabaseDetails": {
+        "type": "object",
+        "properties": {
+          "server": { "type": "string" },
+          "title": { "type": "string" },
+          "replicaId": { "type": "string" },
+          "designTemplateName": { "type": "string" },
+          "absoluteFilePath": { "type": "string" },
+          "relativeFilePath": { "type": "string" },
+          "templateName": { "type": "string" },
+          "categories": { "type": "string" },
+          "created": { "type": "string", "format": "date-time" },
+          "dataModified": { "type": "string", "format": "date-time" },
+          "buildVersion": { "type": "string" },
+          "effectiveAccess": { "type": "string", "example": "MANAGER" },
+          "viewCount": { "type": "integer" },
+          "formCount": { "type": "integer" }
+        }
+      },
+      "ViewSummary": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "noteId": { "type": "string", "description": "Hexadecimal" },
+          "unid": { "type": "string" },
+          "comment": { "type": "string" },
+          "hideFromWeb": { "type": "boolean" },
+          "hideFromNotes": { "type": "boolean" },
+          "selectionFormula": { "type": "string" }
+        }
+      },
+      "FormSummary": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "noteId": { "type": "string", "description": "Hexadecimal" },
+          "unid": { "type": "string" },
+          "comment": { "type": "string" },
+          "hideFromWeb": { "type": "boolean" },
+          "hideFromNotes": { "type": "boolean" },
+          "type": { "type": "string", "example": "DOCUMENT" }
+        }
+      },
+      "FormDetails": {
+        "allOf": [
+          { "$ref": "#/components/schemas/FormSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "fieldCount": { "type": "integer" },
+              "fields": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/FormFieldDefinition" }
+              },
+              "fieldsError": {
+                "type": "string",
+                "description": "Present only when the field definitions could not be read"
+              },
+              "properties": {
+                "type": "object",
+                "description": "Form properties such as defaultForm, versioningBehavior, conflictBehavior",
+                "additionalProperties": true
+              },
+              "formulas": {
+                "type": "object",
+                "description": "Form-level formulas: windowTitle, webQueryOpen, webQuerySave and others",
+                "additionalProperties": { "type": "string" }
+              },
+              "events": {
+                "type": "object",
+                "description": "Formula-language events keyed by Domino event id",
+                "additionalProperties": { "type": "string" }
+              },
+              "subforms": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": { "type": "string", "example": "FORMULA" },
+                    "value": { "type": "string" }
+                  }
+                }
+              },
+              "lotusScript": { "type": "string" },
+              "lotusScriptGlobals": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "FormFieldDefinition": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "dataType": { "type": "string", "example": "TYPE_TEXT" },
+          "kind": {
+            "type": "string",
+            "enum": ["EDITABLE", "COMPUTED", "COMPUTEDFORDISPLAY", "COMPUTEDWHENCOMPOSED"]
+          },
+          "displayType": { "type": "string", "example": "DIALOGLIST" },
+          "description": { "type": "string" },
+          "defaultValueFormula": { "type": "string" },
+          "inputTranslationFormula": { "type": "string" },
+          "inputValidityCheckFormula": { "type": "string" },
+          "keywordFormula": { "type": "string" },
+          "choices": { "type": "array", "items": { "type": "string" } },
+          "listInputDelimiters": { "type": "string" },
+          "listDisplayDelimiter": { "type": "string" },
+          "html": {
+            "type": "object",
+            "description": "HTML attributes set on the field, omitted when all are empty",
+            "additionalProperties": { "type": "string" }
+          },
+          "lotusScript": { "type": "string", "description": "LotusScript attached to this field" }
+        }
+      },
+      "DocumentDump": {
+        "type": "object",
+        "properties": {
+          "unid": { "type": "string" },
+          "noteId": { "type": "string", "description": "Hexadecimal" },
+          "form": { "type": "string" },
+          "itemCount": { "type": "integer" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string", "example": "TYPE_TEXT" },
+                "summary": { "type": "boolean" },
+                "valueLength": { "type": "integer" },
+                "value": {
+                  "type": "array",
+                  "items": {},
+                  "nullable": true,
+                  "description": "Multi-value items yield several entries. Dates are ISO-8601. Null when the value could not be read or was not expanded."
+                },
+                "note": {
+                  "type": "string",
+                  "description": "Why the value is absent, e.g. rich text not expanded"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

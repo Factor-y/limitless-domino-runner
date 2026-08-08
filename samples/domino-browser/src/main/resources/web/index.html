@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Domino Browser</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #d9dde3;
+      --text: #1b1f24;
+      --muted: #6b7280;
+      --accent: #1a56b8;
+      --accent-soft: #e8f0fd;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14171c;
+        --panel: #1c2027;
+        --border: #2e343d;
+        --text: #e6e8eb;
+        --muted: #9aa3ad;
+        --accent: #6ea8fe;
+        --accent-soft: #223049;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 16px; margin: 0 12px 0 0; font-weight: 600; }
+    label { color: var(--muted); font-size: 12px; }
+    input[type=text] {
+      padding: 6px 9px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      min-width: 150px;
+    }
+    button {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.primary:hover { opacity: .9; color: #fff; }
+
+    .doc-link {
+      margin-left: auto;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .doc-link:hover { border-color: var(--accent); }
+
+    .layout { display: flex; height: calc(100vh - 57px); }
+    .sidebar {
+      width: 340px;
+      min-width: 240px;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+      overflow-y: auto;
+    }
+    .sidebar .filter-box {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      z-index: 2;
+    }
+    .sidebar .filter-box input { width: 100%; }
+    .sidebar .head {
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .db {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .db:hover { background: var(--accent-soft); }
+    .db.active { background: var(--accent-soft); border-left: 3px solid var(--accent); }
+    .db .title { font-weight: 500; }
+    .db .path { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; }
+
+    .main { flex: 1; overflow-y: auto; padding: 16px 20px; min-width: 0; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      background: var(--panel);
+      font-size: 13px;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .panel h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 10px; }
+    .field { display: flex; flex-direction: column; gap: 3px; }
+
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+    td.mono, .mono { font-family: var(--mono); font-size: 12px; }
+    td .val { white-space: pre-wrap; word-break: break-word; max-width: 640px; }
+
+    .status { color: var(--muted); font-size: 13px; padding: 8px 0; }
+    .error {
+      color: #b42318;
+      background: #fee4e2;
+      border: 1px solid #fda29b;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .error { color: #ffb4ab; background: #3b1a17; border-color: #7a2820; }
+    }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      margin: 0;
+    }
+    .hidden { display: none; }
+    td.link { cursor: pointer; color: var(--accent); }
+    td.link:hover { text-decoration: underline; }
+    .form-heading { margin: 12px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    h3 {
+      font-size: 12px;
+      margin: 18px 0 8px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field-detail-row > td { padding: 0; background: var(--accent-soft); }
+    .field-detail {
+      padding: 10px 14px;
+      border-left: 3px solid var(--accent);
+    }
+    .field-detail h3 { margin-top: 12px; }
+    .field-detail table { background: var(--panel); }
+    td.link.open { font-weight: 600; }
+    pre { max-height: 380px; overflow-y: auto; }
+    .pill {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Domino Browser</h1>
+  <div class="field">
+    <label for="server">Server (empty = local)</label>
+    <input type="text" id="server" placeholder="e.g. Server1/Acme">
+  </div>
+  <button class="primary" id="loadDbs">Load databases</button>
+  <span class="status" id="headerStatus"></span>
+  <a class="doc-link" href="/swagger/" target="_blank" rel="noopener">API docs</a>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="filter-box">
+      <input type="text" id="dbFilter" placeholder="Filter by title or file name...">
+    </div>
+    <div class="head" id="dbListHead">No databases loaded</div>
+    <div id="dbList"></div>
+  </aside>
+
+  <main class="main">
+    <div id="noSelection" class="status">Load the databases, then pick one from the list.</div>
+
+    <div id="workspace" class="hidden">
+      <div class="panel">
+        <h2>Selected database</h2>
+        <div><strong id="selTitle"></strong></div>
+        <div class="mono" id="selPath"></div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="details">Details</div>
+        <div class="tab" data-tab="views">Views</div>
+        <div class="tab" data-tab="forms">Forms</div>
+        <div class="tab" data-tab="document">Document</div>
+        <div class="tab" data-tab="named">Named</div>
+        <div class="tab" data-tab="profile">Profile</div>
+      </div>
+
+      <section class="panel" id="tab-details">
+        <h2>Database details</h2>
+        <div id="detailsBody" class="status">Loading...</div>
+      </section>
+
+      <section class="panel hidden" id="tab-views">
+        <h2>Views</h2>
+        <div id="viewsBody" class="status">Loading...</div>
+      </section>
+
+      <section class="panel hidden" id="tab-forms">
+        <h2>Forms</h2>
+        <div id="formsBody" class="status">Loading...</div>
+      </section>
+
+      <section class="panel hidden" id="tab-document">
+        <h2>Document by note ID or UNID</h2>
+        <div class="row">
+          <div class="field">
+            <label for="noteid">Note ID (hex)</label>
+            <input type="text" id="noteid" placeholder="e.g. 8FA">
+          </div>
+          <div class="field">
+            <label for="unid">or UNID</label>
+            <input type="text" id="unid" placeholder="32 hex characters">
+          </div>
+          <button class="primary" id="loadDoc">Load</button>
+        </div>
+        <div id="documentBody"></div>
+      </section>
+
+      <section class="panel hidden" id="tab-named">
+        <h2>Named document</h2>
+        <div class="row">
+          <div class="field">
+            <label for="namedName">Name</label>
+            <input type="text" id="namedName" placeholder="document name">
+          </div>
+          <div class="field">
+            <label for="namedUser">User name (optional)</label>
+            <input type="text" id="namedUser">
+          </div>
+          <button class="primary" id="loadNamed">Load</button>
+          <button id="listNamed">List available</button>
+        </div>
+        <div id="namedBody"></div>
+      </section>
+
+      <section class="panel hidden" id="tab-profile">
+        <h2>Profile document</h2>
+        <div class="row">
+          <div class="field">
+            <label for="profileName">Profile name</label>
+            <input type="text" id="profileName" placeholder="e.g. mailprofile">
+          </div>
+          <div class="field">
+            <label for="profileUser">User name (optional)</label>
+            <input type="text" id="profileUser">
+          </div>
+          <button class="primary" id="loadProfile">Load</button>
+        </div>
+        <div id="profileBody"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+  const state = { server: '', db: null, dbTitle: '', databases: [], serverLabel: '' };
+
+  const $ = (id) => document.getElementById(id);
+
+  /** Single place where server errors become a readable message instead of a silent blank. */
+  async function api(path, params) {
+    const query = new URLSearchParams({ server: state.server, ...params });
+    const response = await fetch(path + '?' + query.toString());
+    const body = await response.json().catch(() => ({ error: 'invalid response from server' }));
+    if (!response.ok) {
+      throw new Error(body.error || ('HTTP ' + response.status));
+    }
+    return body;
+  }
+
+  function showError(target, err) {
+    target.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'error';
+    div.textContent = err.message;
+    target.appendChild(div);
+  }
+
+  function setBusy(target, message) {
+    target.innerHTML = '<div class="status">' + (message || 'Loading...') + '</div>';
+  }
+
+  function table(columns, rows, renderer) {
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    const t = document.createElement('table');
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    columns.forEach(c => {
+      const th = document.createElement('th');
+      th.textContent = c;
+      htr.appendChild(th);
+    });
+    thead.appendChild(htr);
+    t.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(r => tbody.appendChild(renderer(r)));
+    t.appendChild(tbody);
+    wrap.appendChild(t);
+    return wrap;
+  }
+
+  function cell(text, mono) {
+    const td = document.createElement('td');
+    if (mono) td.className = 'mono';
+    const div = document.createElement('div');
+    div.className = 'val';
+    div.textContent = text === null || text === undefined ? '' : String(text);
+    td.appendChild(div);
+    return td;
+  }
+
+  // --- databases ------------------------------------------------------------------
+
+  async function loadDatabases() {
+    state.server = $('server').value.trim();
+    $('headerStatus').textContent = 'Loading databases...';
+    $('dbList').innerHTML = '';
+    try {
+      const data = await api('/api/databases', {});
+      state.databases = data.databases;
+      state.serverLabel = data.server;
+      $('headerStatus').textContent = '';
+      renderDatabases();
+    } catch (err) {
+      $('headerStatus').textContent = '';
+      $('dbListHead').textContent = 'Failed to load';
+      showError($('dbList'), err);
+    }
+  }
+
+  /**
+   * Renders the database list, applying the current filter. Filtering happens here rather
+   * than server-side: the full list is already loaded, so this stays instant as you type.
+   */
+  function renderDatabases() {
+    const filter = $('dbFilter').value.trim().toLowerCase();
+    const matches = state.databases.filter(db => {
+      if (!filter) return true;
+      return (db.title || '').toLowerCase().includes(filter)
+        || (db.fileName || '').toLowerCase().includes(filter)
+        || (db.filePath || '').toLowerCase().includes(filter);
+    });
+
+    $('dbListHead').textContent = filter
+      ? matches.length + ' of ' + state.databases.length + ' databases on ' + state.serverLabel
+      : state.databases.length + ' databases on ' + state.serverLabel;
+
+    const list = $('dbList');
+    list.innerHTML = '';
+    matches.forEach(db => {
+      const div = document.createElement('div');
+      div.className = 'db';
+      if (db.filePath === state.db) div.classList.add('active');
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = db.title || db.fileName;
+      const path = document.createElement('div');
+      path.className = 'path';
+      path.textContent = db.filePath;
+      div.appendChild(title);
+      div.appendChild(path);
+      div.onclick = () => selectDatabase(db, div);
+      list.appendChild(div);
+    });
+  }
+
+  function selectDatabase(db, element) {
+    document.querySelectorAll('.db').forEach(e => e.classList.remove('active'));
+    element.classList.add('active');
+    state.db = db.filePath;
+    state.dbTitle = db.title || db.fileName;
+    $('noSelection').classList.add('hidden');
+    $('workspace').classList.remove('hidden');
+    $('selTitle').textContent = state.dbTitle;
+    $('selPath').textContent = db.filePath;
+    ['documentBody', 'namedBody', 'profileBody'].forEach(id => $(id).innerHTML = '');
+    loadDetails();
+    loadViews();
+    loadForms();
+  }
+
+  // --- tabs -----------------------------------------------------------------------
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.onclick = () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      ['details', 'views', 'forms', 'document', 'named', 'profile'].forEach(name => {
+        $('tab-' + name).classList.toggle('hidden', name !== tab.dataset.tab);
+      });
+    };
+  });
+
+  // --- details / views / forms ----------------------------------------------------
+
+  async function loadDetails() {
+    const target = $('detailsBody');
+    setBusy(target);
+    try {
+      const data = await api('/api/database', { db: state.db });
+      const rows = Object.entries(data);
+      target.innerHTML = '';
+      target.appendChild(table(['Property', 'Value'], rows, ([k, v]) => {
+        const tr = document.createElement('tr');
+        tr.appendChild(cell(k));
+        tr.appendChild(cell(v === null ? '(unavailable)' : v, true));
+        return tr;
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  async function loadViews() {
+    const target = $('viewsBody');
+    setBusy(target);
+    try {
+      const data = await api('/api/database/views', { db: state.db });
+      target.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'status';
+      head.textContent = data.count + ' views';
+      target.appendChild(head);
+      target.appendChild(table(['Title', 'Aliases', 'Note ID', 'Selection formula'], data.views, v => {
+        const tr = document.createElement('tr');
+        tr.appendChild(cell(v.title));
+        tr.appendChild(cell((v.aliases || []).join(', ')));
+        tr.appendChild(cell(v.noteId, true));
+        tr.appendChild(cell(v.selectionFormula, true));
+        return tr;
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  async function loadForms() {
+    const target = $('formsBody');
+    setBusy(target);
+    try {
+      const data = await api('/api/database/forms', { db: state.db });
+      target.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'status';
+      head.textContent = data.count + ' forms — click one to inspect its fields';
+      target.appendChild(head);
+      target.appendChild(table(['Title', 'Aliases', 'Note ID', 'Type'], data.forms, f => {
+        const tr = document.createElement('tr');
+        const titleCell = cell(f.title);
+        titleCell.classList.add('link');
+        titleCell.onclick = () => loadFormDetails(f.title);
+        tr.appendChild(titleCell);
+        tr.appendChild(cell((f.aliases || []).join(', ')));
+        tr.appendChild(cell(f.noteId, true));
+        tr.appendChild(cell(f.type));
+        return tr;
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  /** Renders a key/value map as a two-column table, skipping empty entries. */
+  function propertyTable(obj) {
+    const rows = Object.entries(obj || {}).filter(([, v]) =>
+      v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0));
+    if (!rows.length) return null;
+    return table(['Property', 'Value'], rows, ([k, v]) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(cell(k));
+      tr.appendChild(cell(Array.isArray(v) ? v.join('\n') : v, true));
+      return tr;
+    });
+  }
+
+  function section(target, title, node) {
+    if (!node) return;
+    const h = document.createElement('h3');
+    h.textContent = title;
+    target.appendChild(h);
+    target.appendChild(node);
+  }
+
+  function codeBlock(text) {
+    const pre = document.createElement('pre');
+    pre.textContent = text;
+    return pre;
+  }
+
+  async function loadFormDetails(formName) {
+    const target = $('formsBody');
+    setBusy(target, 'Loading form "' + formName + '"...');
+    try {
+      const data = await api('/api/database/form', { db: state.db, form: formName });
+      target.innerHTML = '';
+
+      const back = document.createElement('button');
+      back.textContent = '← Back to forms';
+      back.onclick = loadForms;
+      target.appendChild(back);
+
+      const heading = document.createElement('div');
+      heading.className = 'form-heading';
+      heading.innerHTML = '<strong>' + (data.title || formName) + '</strong> '
+        + '<span class="pill">Note ID ' + data.noteId + '</span> '
+        + '<span class="pill">' + (data.type || '') + '</span> '
+        + '<span class="pill">' + data.fieldCount + ' fields</span>';
+      target.appendChild(heading);
+
+      if (data.aliases && data.aliases.length) {
+        const aliases = document.createElement('div');
+        aliases.className = 'status';
+        aliases.textContent = 'Aliases: ' + data.aliases.join(', ');
+        target.appendChild(aliases);
+      }
+      if (data.comment) {
+        const comment = document.createElement('div');
+        comment.className = 'status';
+        comment.textContent = data.comment;
+        target.appendChild(comment);
+      }
+      if (data.fieldsError) {
+        const warn = document.createElement('div');
+        warn.className = 'error';
+        warn.textContent = data.fieldsError;
+        target.appendChild(warn);
+      }
+
+      // Fields first: they are what you usually open a form definition for.
+      if (data.fields && data.fields.length) {
+        section(target, 'Fields', table(
+          ['Name', 'Data type', 'Kind', 'Display', 'Default value', 'Validation', 'Choices'],
+          data.fields,
+          f => {
+            const tr = document.createElement('tr');
+            const nameCell = cell(f.name);
+            nameCell.classList.add('link');
+            nameCell.onclick = () => toggleFieldDetail(tr, f);
+            tr.appendChild(nameCell);
+            tr.appendChild(cell((f.dataType || '').replace('TYPE_', ''), true));
+            tr.appendChild(cell(f.kind, true));
+            tr.appendChild(cell(f.displayType, true));
+            tr.appendChild(cell(f.defaultValueFormula, true));
+            tr.appendChild(cell(f.inputValidityCheckFormula, true));
+            tr.appendChild(cell((f.choices || []).join(', ')));
+            return tr;
+          }));
+      }
+
+      section(target, 'Form properties', propertyTable(data.properties));
+      section(target, 'Formulas', propertyTable(data.formulas));
+      section(target, 'Events', propertyTable(data.events));
+
+      if (data.subforms && data.subforms.length) {
+        section(target, 'Subforms', table(['Type', 'Value'], data.subforms, s => {
+          const tr = document.createElement('tr');
+          tr.appendChild(cell(s.type, true));
+          tr.appendChild(cell(s.value));
+          return tr;
+        }));
+      }
+
+      if (data.lotusScriptGlobals && data.lotusScriptGlobals.trim()) {
+        section(target, 'LotusScript (globals)', codeBlock(data.lotusScriptGlobals));
+      }
+      if (data.lotusScript && data.lotusScript.trim()) {
+        section(target, 'LotusScript', codeBlock(data.lotusScript));
+      }
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  /**
+   * Expands the full definition of a field directly beneath its row, so the detail stays next
+   * to what was clicked instead of at the end of a long table.
+   */
+  function toggleFieldDetail(row, field) {
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('field-detail-row')) {
+      next.remove();
+      return;
+    }
+    // Only one field open at a time keeps the table readable.
+    row.parentElement.querySelectorAll('.field-detail-row').forEach(e => e.remove());
+
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'field-detail-row';
+    const container = document.createElement('td');
+    container.colSpan = row.children.length;
+
+    const panel = document.createElement('div');
+    panel.className = 'field-detail';
+
+    const flat = {};
+    Object.entries(field).forEach(([k, v]) => {
+      if (k === 'html' || k === 'lotusScript') return;
+      flat[k] = v;
+    });
+    const props = propertyTable(flat);
+    if (props) panel.appendChild(props);
+
+    if (field.html) {
+      const h = document.createElement('h3');
+      h.textContent = 'HTML attributes';
+      panel.appendChild(h);
+      panel.appendChild(propertyTable(field.html));
+    }
+    if (field.lotusScript) {
+      const h = document.createElement('h3');
+      h.textContent = 'Field LotusScript';
+      panel.appendChild(h);
+      panel.appendChild(codeBlock(field.lotusScript));
+    }
+
+    container.appendChild(panel);
+    detailRow.appendChild(container);
+    row.after(detailRow);
+  }
+
+  // --- documents ------------------------------------------------------------------
+
+  function renderDocument(target, data) {
+    target.innerHTML = '';
+    const meta = document.createElement('div');
+    meta.className = 'status';
+    meta.innerHTML = '<span class="pill">UNID ' + data.unid + '</span> '
+      + '<span class="pill">Note ID ' + data.noteId + '</span> '
+      + data.itemCount + ' items';
+    target.appendChild(meta);
+    target.appendChild(table(['Item', 'Type', 'Value'], data.items, item => {
+      const tr = document.createElement('tr');
+      tr.appendChild(cell(item.name));
+      tr.appendChild(cell(item.type, true));
+      let value;
+      if (item.value === null || item.value === undefined) {
+        value = item.note ? '(' + item.note + ')' : '';
+      } else if (Array.isArray(item.value)) {
+        value = item.value.length === 1 ? item.value[0] : item.value.join('\n');
+      } else {
+        value = item.value;
+      }
+      tr.appendChild(cell(value));
+      return tr;
+    }));
+  }
+
+  async function loadDocument() {
+    const target = $('documentBody');
+    setBusy(target);
+    try {
+      const params = { db: state.db };
+      const noteid = $('noteid').value.trim();
+      const unid = $('unid').value.trim();
+      if (unid) params.unid = unid; else params.noteid = noteid;
+      renderDocument(target, await api('/api/document', params));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  async function loadNamed() {
+    const target = $('namedBody');
+    setBusy(target);
+    try {
+      renderDocument(target, await api('/api/document/named', {
+        db: state.db,
+        name: $('namedName').value.trim(),
+        username: $('namedUser').value.trim()
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  async function listNamed() {
+    const target = $('namedBody');
+    setBusy(target);
+    try {
+      const data = await api('/api/documents/named', { db: state.db });
+      target.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'status';
+      head.textContent = data.count + ' named documents';
+      target.appendChild(head);
+      target.appendChild(table(['Name', 'User name', 'Note ID'], data.namedDocuments, n => {
+        const tr = document.createElement('tr');
+        const nameCell = cell(n.name);
+        nameCell.style.cursor = 'pointer';
+        nameCell.style.color = 'var(--accent)';
+        nameCell.onclick = () => {
+          $('namedName').value = n.name;
+          $('namedUser').value = n.userName || '';
+          loadNamed();
+        };
+        tr.appendChild(nameCell);
+        tr.appendChild(cell(n.userName));
+        tr.appendChild(cell(n.noteId, true));
+        return tr;
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  async function loadProfile() {
+    const target = $('profileBody');
+    setBusy(target);
+    try {
+      renderDocument(target, await api('/api/document/profile', {
+        db: state.db,
+        profile: $('profileName').value.trim(),
+        username: $('profileUser').value.trim()
+      }));
+    } catch (err) {
+      showError(target, err);
+    }
+  }
+
+  $('loadDbs').onclick = loadDatabases;
+  $('loadDoc').onclick = loadDocument;
+  $('loadNamed').onclick = loadNamed;
+  $('listNamed').onclick = listNamed;
+  $('loadProfile').onclick = loadProfile;
+  $('server').addEventListener('keydown', e => { if (e.key === 'Enter') loadDatabases(); });
+  $('dbFilter').addEventListener('input', renderDatabases);
+
+  loadDatabases();
+</script>
+
+</body>
+</html>

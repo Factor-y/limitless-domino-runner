@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.factory.domino</groupId>
+    <artifactId>limitless-domino-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>domino-runner</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Domino Runner</name>
+  <description>Launcher that initializes the Notes/Domino runtime and runs arbitrary Java programs inside it.</description>
+
+  <properties>
+    <!-- Notes.jar is NOT redistributable and must match the installed client, so it is
+         resolved from the local installation instead of a repository. Overridden per-OS
+         by the profiles below, or on the command line with -Dnotes.jar.path=... -->
+    <notes.jar.path>/Applications/HCL Notes.app/Contents/Resources/ndext/Notes.jar</notes.jar.path>
+  </properties>
+
+  <profiles>
+    <profile>
+      <id>notes-jar-macos</id>
+      <activation>
+        <os><family>mac</family></os>
+      </activation>
+      <properties>
+        <notes.jar.path>/Applications/HCL Notes.app/Contents/Resources/ndext/Notes.jar</notes.jar.path>
+      </properties>
+    </profile>
+    <profile>
+      <id>notes-jar-linux</id>
+      <activation>
+        <os><family>unix</family><name>linux</name></os>
+      </activation>
+      <properties>
+        <notes.jar.path>/opt/hcl/domino/notes/latest/linux/ndext/Notes.jar</notes.jar.path>
+      </properties>
+    </profile>
+    <profile>
+      <id>notes-jar-windows</id>
+      <activation>
+        <os><family>windows</family></os>
+      </activation>
+      <properties>
+        <notes.jar.path>C:\Program Files\HCL\Notes\jvm\lib\ext\Notes.jar</notes.jar.path>
+      </properties>
+    </profile>
+  </profiles>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.hcl.domino</groupId>
+      <artifactId>domino-jnx-jna-${jnx.release}</artifactId>
+    </dependency>
+
+    <!-- Notes.jar (lotus.domino classic API), taken from the local client install.
+         Scope 'system' keeps it out of the distribution on purpose: at runtime it must
+         come from the client, so the launch scripts put the client's own copy on the
+         classpath. -->
+    <dependency>
+      <groupId>com.hcl.notes</groupId>
+      <artifactId>notes-jar</artifactId>
+      <version>local</version>
+      <scope>system</scope>
+      <systemPath>${notes.jar.path}</systemPath>
+    </dependency>
+
+    <!-- JNX declares Jakarta Mail and Activation as 'provided', so they are not inherited
+         transitively and must be supplied here. They are not optional in practice: reading
+         design elements goes through code that references jakarta.mail, and without these
+         the first getDesign() call fails with NoClassDefFoundError: jakarta.mail.MessagingException.
+         angus-mail is the implementation and brings both APIs with it. -->
+    <dependency>
+      <groupId>org.eclipse.angus</groupId>
+      <artifactId>angus-mail</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+
+    <!-- lotus.domino.NotesException extends org.omg.CORBA.UserException, but CORBA was
+         removed from the JDK in Java 11 and is not bundled inside Notes.jar. Without this
+         the first Notes.jar call dies with NoClassDefFoundError. -->
+    <dependency>
+      <groupId>org.glassfish.corba</groupId>
+      <artifactId>glassfish-corba-omgapi</artifactId>
+      <version>4.2.5</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}</finalName>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.factory.domino.runner.DominoRunner</mainClass>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>lib/</classpathPrefix>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- Distribution: exploded dist/ with lib/ + bin/ -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-dependencies</id>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/dist/lib</outputDirectory>
+              <includeScope>runtime</includeScope>
+              <excludeScope>system</excludeScope>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Launch scripts. Filtering is deliberately off: the scripts use ${VAR} shell
+           syntax that Maven filtering would mangle. They resolve everything at runtime. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-scripts</id>
+            <phase>package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/dist/bin</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>src/main/scripts</directory>
+                  <filtering>false</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>assemble-dist</id>
+            <phase>package</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                      todir="${project.build.directory}/dist/lib"/>
+                <chmod dir="${project.build.directory}/dist/bin" includes="*.sh" perm="755"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Self-contained shaded jar. ServicesResourceTransformer is mandatory: JNX wires
+           its implementation through META-INF/services entries. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>all</shadedClassifierName>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>com.factory.domino.runner.DominoRunner</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
