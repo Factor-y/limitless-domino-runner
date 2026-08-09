@@ -214,6 +214,16 @@
     .field-detail table { background: var(--panel); }
     td.link.open { font-weight: 600; }
     pre { max-height: 380px; overflow-y: auto; }
+    /* XML syntax colours: readable against both themes without relying on a library. */
+    .x-tag { color: #1a56b8; font-weight: 600; }
+    .x-attr { color: #7a2e8f; }
+    .x-value { color: #0a7c42; }
+    .x-decl, .x-comment { color: var(--muted); font-style: italic; }
+    @media (prefers-color-scheme: dark) {
+      .x-tag { color: #7fb3ff; }
+      .x-attr { color: #d79bf0; }
+      .x-value { color: #7fd6a0; }
+    }
     .pill {
       display: inline-block;
       padding: 1px 7px;
@@ -936,6 +946,154 @@
     }));
   }
 
+  // --- DXL rendering ---------------------------------------------------------------
+
+  /**
+   * Above this size the document is shown as-is: parsing and re-serialising a multi-megabyte
+   * DXL blocks the page for seconds, and the viewer exists to glance at an element.
+   */
+  const MAX_FORMAT_BYTES = 1000000;
+
+  /**
+   * Re-indents DXL for reading — and only for reading.
+   *
+   * The one rule that matters: an element is re-indented only when its children are all
+   * elements. Anything holding text is serialised untouched, because in DXL that text is data.
+   * <formula>SELECT Type = "Account"</formula> becomes a different formula if a newline and two
+   * spaces are inserted, and rich text runs carry significant whitespace throughout.
+   *
+   * Returns null when the document does not parse, in which case the caller shows the original.
+   */
+  function formatXml(xml) {
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(xml, 'application/xml');
+    } catch (err) {
+      return null;
+    }
+    if (!doc || doc.getElementsByTagName('parsererror').length || !doc.documentElement) {
+      return null;
+    }
+
+    const serializer = new XMLSerializer();
+    const lines = [];
+    // The DXL declares its default namespace once, on the root.
+    const defaultNamespace = doc.documentElement.getAttribute('xmlns') || '';
+
+    // The XML declaration and DOCTYPE are not in the DOM tree, so they are carried over
+    // verbatim from the source.
+    const prologue = xml.match(/^\s*(<\?xml[\s\S]*?\?>)?\s*(<!DOCTYPE[^>]*>)?/);
+    if (prologue) {
+      if (prologue[1]) lines.push(prologue[1]);
+      if (prologue[2]) lines.push(prologue[2]);
+    }
+
+    /** True when every child is an element (ignoring whitespace-only text). */
+    function elementOnly(node) {
+      let sawElement = false;
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          sawElement = true;
+        } else if (child.nodeType === Node.TEXT_NODE) {
+          if (child.nodeValue.trim() !== '') return false;
+        } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
+          return false;
+        }
+      }
+      return sawElement;
+    }
+
+    function openTag(element) {
+      const attributes = Array.from(element.attributes)
+        .map(a => a.name + "='" + a.value.replace(/'/g, '&apos;') + "'");
+      const single = '<' + element.nodeName + (attributes.length ? ' ' + attributes.join(' ') : '');
+      // Domino wraps long attribute lists; keeping that habit avoids 900-character lines.
+      if (single.length <= 110 || attributes.length < 2) return single + '>';
+      return '<' + element.nodeName + '\n  ' + attributes.join('\n  ') + '>';
+    }
+
+    function walk(node, depth) {
+      const pad = '  '.repeat(depth);
+      if (node.nodeType === Node.COMMENT_NODE) {
+        lines.push(pad + '<!--' + node.nodeValue + '-->');
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      if (!elementOnly(node)) {
+        // Mixed or text content: emit exactly what the source had.
+        //
+        // XMLSerializer re-declares the default namespace on every subtree it is handed,
+        // so each nested element would carry a redundant xmlns the original does not have.
+        // It is dropped here purely so the view matches the file; the text between the tags
+        // is never touched.
+        let serialized = serializer.serializeToString(node);
+        if (defaultNamespace) {
+          serialized = serialized.split(' xmlns="' + defaultNamespace + '"').join('');
+        }
+        serialized.split('\n').forEach(line => lines.push(pad + line));
+        return;
+      }
+      lines.push(pad + openTag(node).split('\n').join('\n' + pad));
+      for (const child of node.childNodes) {
+        walk(child, depth + 1);
+      }
+      lines.push(pad + '</' + node.nodeName + '>');
+    }
+
+    walk(doc.documentElement, 0);
+    return lines.join('\n');
+  }
+
+  /**
+   * Colours XML for readability. Escaping happens first, so the highlighter only ever inserts
+   * markup around already-inert text — it cannot change what is displayed.
+   *
+   * A '>' inside an attribute value can end a tag match early and misplace a colour span. The
+   * text stays correct; only the highlighting is imperfect in that rare case.
+   */
+  function highlightXml(text) {
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return escaped.replace(/&lt;([\s\S]*?)&gt;/g, (match, inner) => {
+      if (inner.startsWith('!--')) {
+        return '<span class="x-comment">' + match + '</span>';
+      }
+      if (inner.startsWith('?') || inner.startsWith('!')) {
+        return '<span class="x-decl">' + match + '</span>';
+      }
+      // Attributes first, then the element name. The other way round, this second pass
+      // would match the class="x-tag" of the span the first pass had just inserted and
+      // shred its own markup. The name pattern is anchored to the start, so it cannot
+      // reach inside the spans added here.
+      const coloured = inner
+        .replace(/([\w:.-]+)=('[^']*'|"[^"]*")/g,
+            '<span class="x-attr">$1</span>=<span class="x-value">$2</span>')
+        .replace(/^(\/?)([\w:.-]+)/, '$1<span class="x-tag">$2</span>');
+      return '&lt;' + coloured + '&gt;';
+    });
+  }
+
+  /** Renders DXL into a <pre>, formatted or not, always highlighted. */
+  function renderDxl(pre, raw, formatted) {
+    let text = raw;
+    let note = '';
+    if (formatted) {
+      const pretty = formatXml(raw);
+      if (pretty) {
+        text = pretty;
+      } else {
+        note = ' (could not be parsed as XML — showing it unchanged)';
+      }
+    }
+    pre.innerHTML = highlightXml(text);
+    return note;
+  }
+
   function dxlUrl(noteId, download) {
     const query = new URLSearchParams({ server: state.server, db: state.db, noteid: noteId });
     if (download) query.set('download', 'true');
@@ -981,16 +1139,41 @@
     pre.textContent = 'Loading...';
     panel.appendChild(pre);
 
+    // The unmodified DXL, kept separately: formatting is a lens on the view, and download
+    // and import must always use exactly what Domino produced.
+    let rawDxl = '';
+
     const buttons = document.createElement('div');
     buttons.className = 'row';
     buttons.style.marginTop = '10px';
+
+    const formatLabel = document.createElement('label');
+    formatLabel.className = 'check';
+    const formatToggle = document.createElement('input');
+    formatToggle.type = 'checkbox';
+    formatToggle.checked = true;
+    formatLabel.appendChild(formatToggle);
+    formatLabel.appendChild(document.createTextNode(' format'));
+
+    const notice = document.createElement('span');
+    notice.className = 'status';
+
+    function render() {
+      const note = renderDxl(pre, rawDxl, formatToggle.checked);
+      notice.textContent = formatToggle.checked
+        ? 'Formatted for display — the download is unchanged.' + note
+        : '';
+    }
+    formatToggle.onchange = render;
+
     const dl = document.createElement('button');
     dl.textContent = 'Download';
     dl.onclick = () => downloadDxl(element.noteId);
     const copyToImport = document.createElement('button');
     copyToImport.textContent = 'Send to import';
+    // Deliberately the raw DXL, never what is on screen.
     copyToImport.onclick = () => {
-      $('dxlText').value = pre.textContent;
+      $('dxlText').value = rawDxl;
       document.querySelector('.tab[data-tab="dxl"]').click();
     };
     const close = document.createElement('button');
@@ -999,10 +1182,12 @@
       detailRow.remove();
       trigger.textContent = 'View';
     };
+    buttons.appendChild(formatLabel);
     buttons.appendChild(dl);
     buttons.appendChild(copyToImport);
     buttons.appendChild(close);
     panel.appendChild(buttons);
+    panel.appendChild(notice);
 
     container.appendChild(panel);
     detailRow.appendChild(container);
@@ -1011,7 +1196,18 @@
     try {
       const response = await fetch(dxlUrl(element.noteId, false));
       const text = await response.text();
-      pre.textContent = response.ok ? text : 'Export failed: ' + text;
+      if (!response.ok) {
+        pre.textContent = 'Export failed: ' + text;
+        return;
+      }
+      rawDxl = text;
+      if (text.length > MAX_FORMAT_BYTES) {
+        formatToggle.checked = false;
+        formatToggle.disabled = true;
+        formatLabel.title = 'Too large to format ('
+          + Math.round(text.length / 1024) + ' KB); shown unchanged.';
+      }
+      render();
     } catch (err) {
       pre.textContent = 'Export failed: ' + err.message;
     }

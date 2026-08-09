@@ -172,6 +172,14 @@ nothing dropped.
 **Interactive documentation** is at `/swagger/`, served from a bundled Swagger UI webjar (no CDN,
 so it works offline) against the OpenAPI 3 spec at `/openapi.json`. "Try it out" is enabled.
 
+**DXL viewing.** The inline viewer highlights the XML and re-indents it, but only as a lens on
+the display: the download and "send to import" always use the bytes Domino produced. The
+re-indenting is deliberately conservative — an element is indented only when all its children
+are elements, never when it holds text, because in DXL that text is data. Inserting a newline
+inside `<formula>SELECT Type = "Account"</formula>` would change the formula, and rich text runs
+carry significant whitespace throughout. Documents above 1 MB are shown unformatted, since
+parsing and re-serialising them would block the page.
+
 **Form design** (`/api/database/form`) returns each field with its data type, kind
 (editable/computed/…), display type, and its default-value, input-translation, validation and
 keyword formulas, plus choices, HTML attributes and per-field LotusScript — alongside the form's
