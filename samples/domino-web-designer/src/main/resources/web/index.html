@@ -204,7 +204,8 @@
       text-transform: uppercase;
       letter-spacing: .04em;
     }
-    .field-detail-row > td { padding: 0; background: var(--accent-soft); }
+    .field-detail-row > td,
+    .dxl-detail-row > td { padding: 0; background: var(--accent-soft); }
     .field-detail {
       padding: 10px 14px;
       border-left: 3px solid var(--accent);
@@ -923,7 +924,7 @@
       const actions = document.createElement('td');
       const view = document.createElement('button');
       view.textContent = 'View';
-      view.onclick = () => showDxl(e);
+      view.onclick = () => toggleDxl(tr, view, e);
       const download = document.createElement('button');
       download.textContent = 'Download';
       download.onclick = () => downloadDxl(e.noteId);
@@ -945,16 +946,34 @@
     window.location.href = dxlUrl(noteId, true);
   }
 
-  /** Shows the DXL inline, so an element can be inspected without leaving the page. */
-  async function showDxl(element) {
-    const target = $('designBody');
-    const existing = $('dxlPanel');
-    if (existing) existing.remove();
+  /**
+   * Shows the DXL directly beneath the element's own row.
+   *
+   * <p>Appending it to the end of the panel put it far below whatever was clicked — on a
+   * database with hundreds of design elements, out of sight entirely.
+   */
+  async function toggleDxl(row, trigger, element) {
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('dxl-detail-row')) {
+      next.remove();
+      trigger.textContent = 'View';
+      return;
+    }
+    // One open at a time, so the table does not turn into a stack of XML dumps.
+    row.parentElement.querySelectorAll('.dxl-detail-row').forEach(e => e.remove());
+    row.parentElement.querySelectorAll('button').forEach(b => {
+      if (b.textContent === 'Hide') b.textContent = 'View';
+    });
+    trigger.textContent = 'Hide';
+
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'dxl-detail-row';
+    const container = document.createElement('td');
+    container.colSpan = row.children.length;
 
     const panel = document.createElement('div');
-    panel.id = 'dxlPanel';
     panel.className = 'field-detail';
-    panel.style.marginTop = '14px';
+
     const heading = document.createElement('h3');
     heading.textContent = 'DXL — ' + (element.title || element.noteId);
     panel.appendChild(heading);
@@ -976,12 +995,18 @@
     };
     const close = document.createElement('button');
     close.textContent = 'Close';
-    close.onclick = () => panel.remove();
+    close.onclick = () => {
+      detailRow.remove();
+      trigger.textContent = 'View';
+    };
     buttons.appendChild(dl);
     buttons.appendChild(copyToImport);
     buttons.appendChild(close);
     panel.appendChild(buttons);
-    target.appendChild(panel);
+
+    container.appendChild(panel);
+    detailRow.appendChild(container);
+    row.after(detailRow);
 
     try {
       const response = await fetch(dxlUrl(element.noteId, false));
