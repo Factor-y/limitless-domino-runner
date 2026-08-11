@@ -89,14 +89,14 @@ Expected output:
 ```
 === Notes.jar (lotus.domino) ===
   Product version : Build V1451FP1_06262026|June 26, 2026
-  User name       : CN=Daniele Vistalli/O=Factor-y/C=IT
+  User name       : CN=Jane Developer/O=Acme/C=IT
   Platform        : Macintosh/64
-  Common user name: Daniele Vistalli
+  Common user name: Jane Developer
 
 === Domino JNX (local databases) ===
   Databases found : 10
 
-  names.nsf                                Vistalli's Contacts
+  names.nsf                                Jane's Contacts
   bookmark.nsf                             Bookmarks (12.0.1)
   ...
 ```
