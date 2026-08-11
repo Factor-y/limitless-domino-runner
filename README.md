@@ -5,6 +5,38 @@ inside it. The target program runs in the same JVM, on a thread that already hol
 Domino context, so it can use both the classic `lotus.domino` API (Notes.jar) and
 [Domino JNX](https://opensource.hcltechsw.com/domino-jnx/) without doing any setup of its own.
 
+## Install
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://github.com/Factor-y/limitless-domino-runner/releases/latest/download/install.sh | sh
+```
+
+Windows:
+
+```powershell
+irm https://github.com/Factor-y/limitless-domino-runner/releases/latest/download/install.ps1 | iex
+```
+
+The installer detects the platform, checks for a Notes client before downloading anything,
+verifies the published SHA-256, unpacks into `~/.limitless-domino`, and finishes by validating
+the setup. To read it before running it — the sensible way to treat any script piped into a
+shell — download `install.sh` first and run it separately.
+
+Then:
+
+```bash
+limitless-domino jvm        # download the JVM macOS needs (once)
+limitless-domino validate   # check the setup, with a reason for anything that fails
+limitless-domino designer   # start the web designer on localhost:8080
+```
+
+`validate` exits with a category: 10 environment, 11 dependencies, 12 runtime, 13 credentials —
+so scripts can act on it. `--json` makes the output machine-readable.
+
+Options: `--version`, `--dir`, `--with-jvm`, `--add-to-path`, `--uninstall`.
+
 ## Modules
 
 | Module | What it is |
