@@ -126,3 +126,71 @@ _require-jvm:
         echo "JVM not found at {{ java_home }}. Run 'just setup-jvm' first." >&2
         exit 1
     fi
+
+# --- Distribution ------------------------------------------------------------------
+
+project_version := "1.0.0"
+dist_name := "limitless-domino-" + project_version
+dist_root := justfile_directory() / "target"
+
+# Assemble the downloadable distribution zip (no JVM, no Notes.jar — see NOTICE)
+package: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    staging="{{ dist_root }}/{{ dist_name }}"
+    rm -rf "$staging" "{{ dist_root }}/{{ dist_name }}.zip"
+    mkdir -p "$staging/bin" "$staging/lib" "$staging/samples"
+
+    # The runner and its dependencies. Notes.jar is deliberately absent: it is not
+    # redistributable and has to match the installed client, so the launcher takes it
+    # from the local installation at run time.
+    cp "{{ justfile_directory() }}"/domino-runner/target/dist/lib/*.jar "$staging/lib/"
+    cp "{{ justfile_directory() }}"/domino-runner/target/dist/bin/* "$staging/bin/"
+    cp "{{ justfile_directory() }}"/domino-runner/src/main/scripts/limitless-domino "$staging/bin/"
+    cp "{{ justfile_directory() }}"/samples/domino-web-designer/target/domino-web-designer.jar \
+       "$staging/samples/"
+    cp "{{ justfile_directory() }}/README.md" "$staging/"
+    chmod +x "$staging/bin/limitless-domino" "$staging"/bin/*.sh
+    echo "{{ project_version }}" > "$staging/VERSION"
+
+    cat > "$staging/NOTICE" <<'NOTICE_END'
+    Limitless Domino Runner
+    =======================
+
+    This distribution does NOT contain Notes.jar.
+
+    Notes.jar is part of the HCL Notes/Domino installation, is not redistributable, and
+    must match the installed client exactly. The launch scripts locate it in the local
+    installation at run time.
+
+    No JVM is included either. On macOS the Notes client requires an x86_64 OpenJ9 JVM
+    (IBM Semeru); run `limitless-domino jvm` to download one, or point
+    DOMINO_RUNNER_JAVA_HOME at your own.
+
+    Third-party components are redistributed under their own licences, including
+    Domino JNX (Apache 2.0, HCL), JNA, Javalin, Jetty, Jackson and Swagger UI.
+    NOTICE_END
+    sed -i '' 's/^    //' "$staging/NOTICE"
+
+    cd "{{ dist_root }}"
+    zip -qr "{{ dist_name }}.zip" "{{ dist_name }}"
+    shasum -a 256 "{{ dist_name }}.zip" > "{{ dist_name }}.zip.sha256"
+
+    echo "Built {{ dist_root }}/{{ dist_name }}.zip"
+    echo "  size:   $(du -h "{{ dist_name }}.zip" | cut -f1)"
+    echo "  sha256: $(cut -d' ' -f1 "{{ dist_name }}.zip.sha256")"
+
+# Unpack the built zip into a scratch directory and validate it, as a user would
+verify-package: package
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scratch="$(mktemp -d)"
+    unzip -q "{{ dist_root }}/{{ dist_name }}.zip" -d "$scratch"
+    echo "Unpacked into $scratch/{{ dist_name }}"
+    "$scratch/{{ dist_name }}/bin/limitless-domino" version
+    echo
+    echo "Contents:"
+    (cd "$scratch/{{ dist_name }}" && find . -type f | sort | sed 's/^/  /')
+    echo
+    echo "Leaving it at $scratch for inspection; remove it when done."

@@ -1,0 +1,129 @@
+#!/bin/bash
+#
+# Limitless Domino Runner — single entry point.
+#
+#   limitless-domino validate            check that the Domino runtime is usable
+#   limitless-domino run <args...>       run a main class or an application jar
+#   limitless-domino designer [args...]  start the Domino Web Designer sample
+#   limitless-domino jvm                 download the JVM this platform needs
+#   limitless-domino env                 show the resolved environment
+#   limitless-domino version             print the version
+#
+# Everything is delegated to the platform launcher, which is what knows how to bind
+# to the local Notes client. This script only decides which one to use and what to run.
+
+set -euo pipefail
+
+install_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="$(cat "$install_dir/VERSION" 2>/dev/null || echo 'unknown')"
+
+die() {
+  echo "limitless-domino: $*" >&2
+  exit 1
+}
+
+# --- platform launcher -------------------------------------------------------------
+
+case "$(uname -s)" in
+  Darwin) launcher="$install_dir/bin/domino-runner-macos.sh" ;;
+  Linux)  launcher="$install_dir/bin/domino-runner-linux.sh" ;;
+  *)      die "unsupported platform '$(uname -s)'. On Windows use bin\\domino-runner-windows.cmd." ;;
+esac
+[ -x "$launcher" ] || die "launcher not found at $launcher; the installation looks incomplete."
+
+designer_jar="$install_dir/samples/domino-web-designer.jar"
+
+usage() {
+  sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+# --- JVM download ------------------------------------------------------------------
+#
+# macOS needs an x86_64 OpenJ9 JVM: the Notes client ships x86_64 binaries and its runtime
+# requires OpenJ9. The HotSpot JRE bundled with the client looks like it works — short runs
+# succeed — but crashes under real use, so it is not an option.
+
+semeru_version="21.0.12.0"
+semeru_dir="jdk-21.0.12+8"
+
+download_jvm() {
+  local jvm_root="$install_dir/.jvm"
+  local java_home="$jvm_root/$semeru_dir/Contents/Home"
+
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo "On this platform any JDK 21+ matching the Domino architecture will do;"
+    echo "point DOMINO_RUNNER_JAVA_HOME at it."
+    return 0
+  fi
+  if [ -x "$java_home/bin/java" ]; then
+    echo "JVM already installed at $java_home"
+    "$java_home/bin/java" -version
+    return 0
+  fi
+
+  local archive="ibm-semeru-open-jdk_x64_mac_${semeru_version}.tar.gz"
+  local url="https://github.com/ibmruntimes/semeru21-binaries/releases/download/jdk-${semeru_version}/${archive}"
+
+  mkdir -p "$jvm_root"
+  echo "Downloading IBM Semeru $semeru_version for macOS x64 (about 230 MB)..."
+  curl -fL --progress-bar -o "$jvm_root/$archive" "$url"
+  echo "Unpacking..."
+  tar xzf "$jvm_root/$archive" -C "$jvm_root"
+  rm -f "$jvm_root/$archive"
+
+  [ -x "$java_home/bin/java" ] \
+    || die "unpacked, but $java_home is not a JVM; the archive layout may have changed."
+
+  # Verify what actually decides whether Domino can be loaded, rather than trusting the
+  # download: a mismatch here would otherwise surface as a native crash later.
+  local arch
+  arch="$(file -b "$java_home/bin/java" | grep -oE 'x86_64|arm64' | head -1)"
+  [ "$arch" = "x86_64" ] || die "expected an x86_64 JVM, got '$arch'."
+  "$java_home/bin/java" -version 2>&1 | grep -qi openj9 \
+    || die "expected an OpenJ9 JVM; this one is not."
+
+  echo
+  "$java_home/bin/java" -version
+  echo
+  echo "Ready. The launcher discovers it automatically."
+}
+
+# --- commands ----------------------------------------------------------------------
+
+command="${1:-help}"
+[ $# -gt 0 ] && shift || true
+
+case "$command" in
+  validate|doctor)
+    # Exit code says which category failed: 10 environment, 11 dependencies,
+    # 12 runtime, 13 credentials. Passed through unchanged for scripting.
+    exec "$launcher" com.factory.domino.runner.DominoDoctor "$@"
+    ;;
+  run)
+    [ $# -gt 0 ] || die "run needs a main class or --jar <path>. See 'limitless-domino help'."
+    exec "$launcher" "$@"
+    ;;
+  designer)
+    [ -f "$designer_jar" ] || die "the designer sample is not part of this installation."
+    # '--' ends the launcher's own options so the rest reaches the application.
+    exec "$launcher" --jar "$designer_jar" --wait -- "$@"
+    ;;
+  jvm|setup-jvm)
+    download_jvm
+    ;;
+  env)
+    DOMINO_RUNNER_DEBUG=1 exec "$launcher"
+    ;;
+  version|--version|-v)
+    echo "limitless-domino $version"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    echo "limitless-domino: unknown command '$command'" >&2
+    echo >&2
+    usage >&2
+    exit 2
+    ;;
+esac
